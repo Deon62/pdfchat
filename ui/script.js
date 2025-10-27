@@ -125,7 +125,41 @@ function addMessage(role, content) {
 
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
-    messageDiv.textContent = content;
+    
+    // Create avatar
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'message-avatar';
+    
+    if (role === 'user') {
+        // Human icon
+        avatarDiv.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+        `;
+    } else {
+        // AI/Robot icon
+        avatarDiv.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H5V21H19V9Z"/>
+            </svg>
+        `;
+    }
+    
+    // Create content container
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    // Clean content for assistant messages (remove markdown formatting)
+    let cleanContent = content;
+    if (role === 'assistant') {
+        cleanContent = content.replace(/\*\*(.*?)\*\*/g, '$1');
+    }
+    
+    contentDiv.textContent = cleanContent;
+    
+    messageDiv.appendChild(avatarDiv);
+    messageDiv.appendChild(contentDiv);
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
