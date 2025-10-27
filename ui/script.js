@@ -234,6 +234,8 @@ function loadDocuments() {
     
     if (documents.length > 0) {
         currentDocument = documents[documents.length - 1];
+        // Load chat history for the current document
+        loadChatHistory();
     }
     
     updateDocumentList();
@@ -268,14 +270,54 @@ function updateDocumentList() {
             <div class="document-date">${formatDate(doc.date)}</div>
         `;
         
-        item.addEventListener('click', () => {
+        item.addEventListener('click', async () => {
             currentDocument = doc;
             updateDocumentList();
-            clearChat();
+            await loadChatHistory();
         });
         
         documentList.appendChild(item);
     });
+}
+
+async function loadChatHistory() {
+    if (!currentDocument) return;
+    
+    try {
+        const response = await fetch(`/api/chat/history/${currentDocument.id}`);
+        if (response.ok) {
+            const data = await response.json();
+            const messages = data.messages || [];
+            
+            // Clear current chat
+            chatMessages.innerHTML = '';
+            
+            // Remove welcome message if there are actual messages
+            if (messages.length > 0) {
+                // Add all messages from history
+                for (const msg of messages) {
+                    addMessage(msg.role, msg.content);
+                }
+            } else {
+                // Show welcome message if no history
+                chatMessages.innerHTML = `
+                    <div class="welcome-message">
+                        <h2>Start a conversation</h2>
+                        <p>You can now ask questions about "${currentDocument.name}"</p>
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading chat history:', error);
+        // Show welcome message on error
+        chatMessages.innerHTML = `
+            <div class="welcome-message">
+                <h2>Start a conversation</h2>
+                <p>You can now ask questions about "${currentDocument.name}"</p>
+            </div>
+        `;
+    }
 }
 
 function clearChat() {

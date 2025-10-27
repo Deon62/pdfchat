@@ -2,6 +2,7 @@ langchain-core
 langchain-community
 langchain-chroma
 langchain-google-genai
+langchain-mistralai
 google-generativeai
 chromadb
 tiktoken
@@ -9,3 +10,4 @@ python-dotenv
 pypdf
 flask
 flask-cors
+requests
