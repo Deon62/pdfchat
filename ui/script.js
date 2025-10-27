@@ -14,6 +14,61 @@ window.addEventListener('DOMContentLoaded', () => {
     loadDocuments();
 });
 
+// Streaming helper
+async function typeText(element, text, delay = 15) {
+    element.textContent = '';
+    for (let i = 0; i < text.length; i++) {
+        element.textContent += text[i];
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        await new Promise(r => setTimeout(r, delay));
+    }
+}
+
+function createMessage(role) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}`;
+
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'message-avatar';
+
+    if (role === 'user') {
+        avatarDiv.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+        `;
+    } else {
+        avatarDiv.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H5V21H19V9Z"/>
+            </svg>
+        `;
+    }
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    messageDiv.appendChild(avatarDiv);
+    messageDiv.appendChild(contentDiv);
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    return { messageDiv, contentDiv };
+}
+
+function addAssistantThinking() {
+    const { messageDiv, contentDiv } = createMessage('assistant');
+    contentDiv.innerHTML = `
+        <span class="thinking">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="thinking-text">Thinking...</span>
+        </span>
+    `;
+    return { messageDiv, contentDiv };
+}
+
 // File upload functions
 function openFileInput() {
     document.getElementById('pdfInput').click();
@@ -81,6 +136,9 @@ async function sendMessage() {
     messageInput.disabled = true;
     sendBtn.disabled = true;
 
+    // Show assistant thinking placeholder
+    const { contentDiv: thinkingContent } = addAssistantThinking();
+
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
@@ -98,10 +156,13 @@ async function sendMessage() {
         }
 
         const data = await response.json();
-        addMessage('assistant', data.response);
+        // Clean markdown (bold) if present
+        const clean = (data.response || '').replace(/\*\*(.*?)\*\*/g, '$1');
+        // Stream into the thinking bubble
+        await typeText(thinkingContent, clean, 12);
     } catch (error) {
         console.error('Chat error:', error);
-        addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+        thinkingContent.textContent = 'Sorry, I encountered an error. Please try again.';
     } finally {
         messageInput.disabled = false;
         sendBtn.disabled = false;
