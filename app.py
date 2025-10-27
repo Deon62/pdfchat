@@ -211,11 +211,21 @@ def chat():
         # Retrieve relevant documents
         relevant_docs = retriever.invoke(message)
         
-        # Format context from retrieved documents
-        context = "\n\n".join([
-            f"[Source {i+1}]\n{doc.page_content}"
-            for i, doc in enumerate(relevant_docs)
-        ])
+        # Format context from retrieved documents with metadata
+        context_parts = []
+        sources = []
+        
+        for i, doc in enumerate(relevant_docs):
+            source_info = {
+                'index': i + 1,
+                'content': doc.page_content,
+                'page': doc.metadata.get('page', 'Unknown'),
+                'source': doc.metadata.get('source', 'Unknown')
+            }
+            sources.append(source_info)
+            context_parts.append(f"[Source {i+1}]\n{doc.page_content}")
+        
+        context = "\n\n".join(context_parts)
         
         # Add user message to history
         chat_history.add_user_message(message)
@@ -230,7 +240,8 @@ def chat():
         conversation_histories[document_id] = chat_history
         
         return jsonify({
-            'response': response
+            'response': response,
+            'sources': sources
         })
     
     except Exception as e:

@@ -215,6 +215,65 @@ body {
     40% { opacity: 1; }
 }
 
+/* Citation styles */
+.citations {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e0e0e0;
+}
+
+.citation {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.citation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.citation-source {
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.citation-content {
+    color: #212529;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+.citation-page {
+    background: #007bff;
+    color: white;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.citation-toggle {
+    background: none;
+    border: none;
+    color: #007bff;
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-decoration: underline;
+}
+
+.citation-toggle:hover {
+    color: #0056b3;
+}
+
 .message.user {
     background: #1a1a1a;
     color: white;

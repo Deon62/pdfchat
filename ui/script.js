@@ -69,6 +69,43 @@ function addAssistantThinking() {
     return { messageDiv, contentDiv };
 }
 
+function addCitations(contentDiv, sources) {
+    const citationsDiv = document.createElement('div');
+    citationsDiv.className = 'citations';
+    
+    sources.forEach((source, index) => {
+        const citationDiv = document.createElement('div');
+        citationDiv.className = 'citation';
+        
+        const filename = source.source.split('/').pop().replace(/^[^-]+-/, '') || 'Document';
+        
+        citationDiv.innerHTML = `
+            <div class="citation-header">
+                <span>Source ${source.index}</span>
+                <div>
+                    <span class="citation-page">Page ${source.page}</span>
+                    <button class="citation-toggle" onclick="toggleCitation(${index})">Show/Hide</button>
+                </div>
+            </div>
+            <div class="citation-source">${filename}</div>
+            <div class="citation-content" id="citation-${index}" style="display: none;">
+                ${source.content}
+            </div>
+        `;
+        
+        citationsDiv.appendChild(citationDiv);
+    });
+    
+    contentDiv.appendChild(citationsDiv);
+}
+
+function toggleCitation(index) {
+    const citationContent = document.getElementById(`citation-${index}`);
+    if (citationContent) {
+        citationContent.style.display = citationContent.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
 // File upload functions
 function openFileInput() {
     document.getElementById('pdfInput').click();
@@ -160,6 +197,11 @@ async function sendMessage() {
         const clean = (data.response || '').replace(/\*\*(.*?)\*\*/g, '$1');
         // Stream into the thinking bubble
         await typeText(thinkingContent, clean, 12);
+        
+        // Add citations if available
+        if (data.sources && data.sources.length > 0) {
+            addCitations(thinkingContent, data.sources);
+        }
     } catch (error) {
         console.error('Chat error:', error);
         thinkingContent.textContent = 'Sorry, I encountered an error. Please try again.';
