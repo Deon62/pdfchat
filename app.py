@@ -168,61 +168,88 @@ def test():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
+    print("Upload endpoint called")  # Debug print
     if 'file' not in request.files:
+        print("No file in request")  # Debug print
         return jsonify({'error': 'No file provided'}), 400
     
     file = request.files['file']
+    print(f"File received: {file.filename}")  # Debug print
     if file.filename == '':
+        print("Empty filename")  # Debug print
         return jsonify({'error': 'No file selected'}), 400
     
     if file and allowed_file(file.filename):
+        print(f"File validation passed: {file.filename}")  # Debug print
         # Generate unique ID for this document
         doc_id = str(uuid.uuid4())
         filename = secure_filename(file.filename)
         filepath = os.path.join(UPLOAD_FOLDER, f"{doc_id}_{filename}")
         
         # Save file
-        file.save(filepath)
+        try:
+            file.save(filepath)
+            print(f"File saved to: {filepath}")  # Debug print
+        except Exception as e:
+            print(f"Error saving file: {e}")  # Debug print
+            return jsonify({'error': f'Failed to save file: {str(e)}'}), 500
         
         # Load and process PDF
-        loader = PyPDFLoader(filepath)
-        docs = loader.load()
+        try:
+            loader = PyPDFLoader(filepath)
+            docs = loader.load()
+            print(f"PDF loaded, {len(docs)} pages")  # Debug print
+        except Exception as e:
+            print(f"Error loading PDF: {e}")  # Debug print
+            return jsonify({'error': f'Failed to load PDF: {str(e)}'}), 500
         
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            add_start_index=True,
-        )
-        
-        chunks = text_splitter.split_documents(docs)
+        try:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200,
+                add_start_index=True,
+            )
+            
+            chunks = text_splitter.split_documents(docs)
+            print(f"PDF split into {len(chunks)} chunks")  # Debug print
+        except Exception as e:
+            print(f"Error splitting PDF: {e}")  # Debug print
+            return jsonify({'error': f'Failed to process PDF: {str(e)}'}), 500
         
         # Create vector store for this document
-        collection_name = f"doc_{doc_id}"
-        vector_store = Chroma(
-            collection_name=collection_name,
-            embedding_function=embeddings,
-            persist_directory="chroma_db",
-        )
-        
-        # Add documents to vector store
-        vector_store.add_documents(documents=chunks)
-        
-        # Create retriever
-        retriever = vector_store.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 3}
-        )
-        
-        retrievers[doc_id] = retriever
-        
-        # Initialize conversation history for this document
-        conversation_histories[doc_id] = ChatMessageHistory()
-        
-        return jsonify({
-            'id': doc_id,
-            'filename': filename,
-            'message': 'File uploaded and processed successfully'
-        })
+        try:
+            collection_name = f"doc_{doc_id}"
+            vector_store = Chroma(
+                collection_name=collection_name,
+                embedding_function=embeddings,
+                persist_directory="chroma_db",
+            )
+            print(f"Vector store created: {collection_name}")  # Debug print
+            
+            # Add documents to vector store
+            vector_store.add_documents(documents=chunks)
+            print("Documents added to vector store")  # Debug print
+            
+            # Create retriever
+            retriever = vector_store.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": 3}
+            )
+            
+            retrievers[doc_id] = retriever
+            
+            # Initialize conversation history for this document
+            conversation_histories[doc_id] = ChatMessageHistory()
+            
+            print(f"Upload successful for: {filename}")  # Debug print
+            return jsonify({
+                'id': doc_id,
+                'filename': filename,
+                'message': 'File uploaded and processed successfully'
+            })
+        except Exception as e:
+            print(f"Error creating vector store: {e}")  # Debug print
+            return jsonify({'error': f'Failed to create vector store: {str(e)}'}), 500
     
     return jsonify({'error': 'Invalid file type'}), 400
 
@@ -317,6 +344,38 @@ def clear_chat_history(document_id):
         return jsonify({'message': 'Chat history cleared'})
     
     return jsonify({'error': 'Document not found'}), 404
+
+@app.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    """Submit user feedback for an answer"""
+    data = request.json
+    document_id = data.get('documentId')
+    message_id = data.get('messageId')
+    rating = data.get('rating')
+    comment = data.get('comment', '')
+    
+    if not all([document_id, message_id, rating]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    if not (1 <= rating <= 5):
+        return jsonify({'error': 'Rating must be between 1 and 5'}), 400
+    
+    # Store feedback (in a real app, you'd save to a database)
+    feedback_data = {
+        'document_id': document_id,
+        'message_id': message_id,
+        'rating': rating,
+        'comment': comment,
+        'timestamp': str(uuid.uuid4())  # Simple timestamp for now
+    }
+    
+    # For now, just log the feedback (in production, save to database)
+    print(f"Feedback received: {feedback_data}")
+    
+    return jsonify({
+        'message': 'Feedback submitted successfully',
+        'feedback_id': feedback_data['timestamp']
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

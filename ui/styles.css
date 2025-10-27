@@ -349,6 +349,106 @@ body {
     margin-left: auto;
 }
 
+/* Feedback system styles */
+.feedback-section {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.feedback-prompt {
+    font-size: 0.85rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.star-rating {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.star {
+    font-size: 1.2rem;
+    color: #ddd;
+    cursor: pointer;
+    transition: color 0.2s, transform 0.1s;
+    user-select: none;
+}
+
+.star:hover {
+    transform: scale(1.1);
+}
+
+.star.active {
+    color: #ffc107;
+}
+
+.star.rated {
+    color: #ffc107;
+}
+
+.feedback-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.feedback-comment {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    resize: vertical;
+    min-height: 60px;
+    max-height: 120px;
+}
+
+.feedback-comment:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.submit-feedback-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.submit-feedback-btn:hover {
+    background: #0056b3;
+}
+
+.submit-feedback-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+}
+
+.feedback-thanks {
+    color: #28a745;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.feedback-thanks::before {
+    content: "✓";
+    font-weight: bold;
+}
+
 .message.user {
     background: #1a1a1a;
     color: white;
