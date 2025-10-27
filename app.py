@@ -72,7 +72,36 @@ def load_existing_retrievers():
 # Load existing retrievers on startup
 load_existing_retrievers()
 
-def call_deepseek_api(message, context, conversation_history=None):
+def is_summarization_request(message):
+    """Check if the message is a summarization request"""
+    summarization_keywords = [
+        'summarize', 'summary', 'summarise', 'summaries',
+        'section', 'chapter', 'part', 'subsection',
+        'overview', 'brief', 'outline', 'key points'
+    ]
+    message_lower = message.lower()
+    return any(keyword in message_lower for keyword in summarization_keywords)
+
+def extract_section_number(message):
+    """Extract section/chapter number from the message"""
+    import re
+    # Look for patterns like "section 9", "chapter 3", "part 2", etc.
+    patterns = [
+        r'section\s+(\d+)',
+        r'chapter\s+(\d+)',
+        r'part\s+(\d+)',
+        r'subsection\s+(\d+)',
+        r'(\d+)(?:st|nd|rd|th)?\s+section',
+        r'(\d+)(?:st|nd|rd|th)?\s+chapter'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, message.lower())
+        if match:
+            return int(match.group(1))
+    return None
+
+def call_deepseek_api(message, context, conversation_history=None, is_summarization=False, section_number=None):
     """Direct API call to DeepSeek with conversation history"""
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
@@ -84,7 +113,16 @@ def call_deepseek_api(message, context, conversation_history=None):
     messages = []
     
     # Add system message with document context
-    system_message = f"""You are a helpful assistant that answers questions based on the provided context from a document.
+    if is_summarization and section_number:
+        system_message = f"""You are a helpful assistant that creates comprehensive summaries of specific sections from documents.
+Create a detailed summary of the requested section, organizing the information clearly and highlighting key points.
+Use bullet points, headings, and clear structure to make the summary easy to read.
+Focus only on the content from the specified section.
+
+Context from document (Section {section_number}):
+{context}"""
+    else:
+        system_message = f"""You are a helpful assistant that answers questions based on the provided context from a document.
 Answer the question using only the information from the context. If the context doesn't contain enough information, say so.
 You can reference previous parts of the conversation to provide better context.
 
@@ -108,7 +146,7 @@ Context from document:
         "model": "deepseek-chat",
         "messages": messages,
         "temperature": 0.1,
-        "max_tokens": 2000
+        "max_tokens": 3000 if is_summarization else 2000
     }
     
     response = requests.post(url, headers=headers, json=data)
@@ -208,6 +246,10 @@ def chat():
         retriever = retrievers[document_id]
         chat_history = conversation_histories.get(document_id, ChatMessageHistory())
         
+        # Check if this is a summarization request
+        is_summarization = is_summarization_request(message)
+        section_number = extract_section_number(message) if is_summarization else None
+        
         # Retrieve relevant documents
         relevant_docs = retriever.invoke(message)
         
@@ -231,7 +273,7 @@ def chat():
         chat_history.add_user_message(message)
         
         # Call DeepSeek API with conversation history
-        response = call_deepseek_api(message, context, chat_history.messages)
+        response = call_deepseek_api(message, context, chat_history.messages, is_summarization, section_number)
         
         # Add AI response to history
         chat_history.add_ai_message(response)
@@ -241,7 +283,9 @@ def chat():
         
         return jsonify({
             'response': response,
-            'sources': sources
+            'sources': sources,
+            'is_summarization': is_summarization,
+            'section_number': section_number
         })
     
     except Exception as e:

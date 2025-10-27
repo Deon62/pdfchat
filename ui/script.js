@@ -193,10 +193,29 @@ async function sendMessage() {
         }
 
         const data = await response.json();
-        // Clean markdown (bold) if present
-        const clean = (data.response || '').replace(/\*\*(.*?)\*\*/g, '$1');
-        // Stream into the thinking bubble
-        await typeText(thinkingContent, clean, 12);
+        
+        // Check if this is a summarization response
+        if (data.is_summarization) {
+            // Replace the thinking bubble with summary mode
+            const messageDiv = thinkingContent.closest('.message');
+            messageDiv.classList.add('summary-mode');
+            
+            // Create summary content
+            const clean = (data.response || '').replace(/\*\*(.*?)\*\*/g, '$1');
+            thinkingContent.innerHTML = `
+                <div class="summary-header">
+                    <div class="summary-icon">📋</div>
+                    <span>Summary Mode</span>
+                    ${data.section_number ? `<span class="summary-section-badge">Section ${data.section_number}</span>` : ''}
+                </div>
+                <div class="summary-content">${clean}</div>
+            `;
+        } else {
+            // Regular response
+            const clean = (data.response || '').replace(/\*\*(.*?)\*\*/g, '$1');
+            // Stream into the thinking bubble
+            await typeText(thinkingContent, clean, 12);
+        }
         
         // Add citations if available
         if (data.sources && data.sources.length > 0) {
