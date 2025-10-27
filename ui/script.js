@@ -356,30 +356,33 @@ async function sendMessage() {
             const messageDiv = thinkingContent.closest('.message');
             messageDiv.classList.add('summary-mode');
             
-            // Create summary content
-            const clean = (data.response || '').replace(/\*\*(.*?)\*\*/g, '$1');
+            // Create summary content with formatted HTML
+            const formattedResponse = data.response || '';
             thinkingContent.innerHTML = `
                 <div class="summary-header">
                     <div class="summary-icon">📋</div>
                     <span>Summary Mode</span>
                     ${data.section_number ? `<span class="summary-section-badge">Section ${data.section_number}</span>` : ''}
                 </div>
-                <div class="summary-content">${clean}</div>
+                <div class="summary-content">${formattedResponse}</div>
             `;
         } else {
-            // Regular response
-            const clean = (data.response || '').replace(/\*\*(.*?)\*\*/g, '$1');
-            // Stream into the thinking bubble
-            await typeText(thinkingContent, clean, 12);
+            // Regular response - display formatted HTML content
+            const formattedResponse = data.response || '';
+            thinkingContent.innerHTML = formattedResponse;
         }
         
-        // Add citations if available
+        // Add citations if available (after streaming is complete)
         if (data.sources && data.sources.length > 0) {
-            addCitations(thinkingContent, data.sources);
+            setTimeout(() => {
+                addCitations(thinkingContent, data.sources);
+            }, 100); // Small delay to ensure streaming is complete
         }
         
-        // Add feedback section for AI responses
-        addFeedbackSection(thinkingContent, messageId);
+        // Add feedback section for AI responses (after citations)
+        setTimeout(() => {
+            addFeedbackSection(thinkingContent, messageId);
+        }, 200); // Slightly longer delay to ensure citations are added first
     } catch (error) {
         console.error('Chat error:', error);
         thinkingContent.textContent = 'Sorry, I encountered an error. Please try again.';
@@ -461,8 +464,18 @@ function updateDocumentList() {
         }
         
         item.innerHTML = `
-            <div class="document-name">${doc.name}</div>
-            <div class="document-date">${formatDate(doc.date)}</div>
+            <div class="document-info">
+                <div class="document-name">${doc.name}</div>
+                <div class="document-date">${formatDate(doc.date)}</div>
+            </div>
+            <button class="delete-document-btn" onclick="deleteDocument('${doc.id}', event)" title="Delete document">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3,6 5,6 21,6"></polyline>
+                    <path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            </button>
         `;
         
         item.addEventListener('click', async () => {
@@ -491,7 +504,37 @@ async function loadChatHistory() {
             if (messages.length > 0) {
                 // Add all messages from history
                 for (const msg of messages) {
-                    addMessage(msg.role, msg.content);
+                    if (msg.role === 'user') {
+                        addMessage(msg.role, msg.content);
+                    } else if (msg.role === 'assistant') {
+                        // Create assistant message with proper structure
+                        const { messageDiv, contentDiv, messageId } = createMessage('assistant');
+                        
+                        // Check if this was a summarization response
+                        if (msg.is_summarization) {
+                            messageDiv.classList.add('summary-mode');
+                            
+                            contentDiv.innerHTML = `
+                                <div class="summary-header">
+                                    <div class="summary-icon">📋</div>
+                                    <span>Summary Mode</span>
+                                    ${msg.section_number ? `<span class="summary-section-badge">Section ${msg.section_number}</span>` : ''}
+                                </div>
+                                <div class="summary-content">${msg.content}</div>
+                            `;
+                        } else {
+                            // Regular response - display formatted HTML content immediately
+                            contentDiv.innerHTML = msg.content;
+                        }
+                        
+                        // Add citations if available
+                        if (msg.sources && msg.sources.length > 0) {
+                            addCitations(contentDiv, msg.sources);
+                        }
+                        
+                        // Add feedback section for AI responses
+                        addFeedbackSection(contentDiv, messageId);
+                    }
                 }
             } else {
                 // Show welcome message if no history
@@ -544,4 +587,49 @@ function formatDate(dateString) {
         day: 'numeric', 
         year: 'numeric' 
     });
+}
+
+// Document deletion function
+async function deleteDocument(docId, event) {
+    // Prevent the document click event from firing
+    event.stopPropagation();
+    
+    // Confirm deletion
+    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/documents/${docId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to delete document');
+        }
+        
+        // Remove from local documents array
+        documents = documents.filter(doc => doc.id !== docId);
+        
+        // If this was the current document, clear it
+        if (currentDocument && currentDocument.id === docId) {
+            currentDocument = null;
+            chatMessages.innerHTML = `
+                <div class="welcome-message">
+                    <h2>Start a conversation</h2>
+                    <p>Upload a PDF document to begin chatting with it</p>
+                </div>
+            `;
+        }
+        
+        // Update the document list
+        updateDocumentList();
+        
+        // Save updated documents to localStorage
+        saveDocuments();
+        
+    } catch (error) {
+        console.error('Error deleting document:', error);
+        alert('Failed to delete document. Please try again.');
+    }
 }

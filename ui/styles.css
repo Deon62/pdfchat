@@ -86,6 +86,10 @@ body {
     cursor: pointer;
     transition: background 0.2s;
     border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
 }
 
 .document-item:hover {
@@ -97,16 +101,48 @@ body {
     border-color: #1a1a1a;
 }
 
+.document-info {
+    flex: 1;
+    min-width: 0;
+}
+
 .document-name {
     font-weight: 500;
     color: #1a1a1a;
     margin-bottom: 0.25rem;
     font-size: 0.9rem;
+    word-break: break-word;
 }
 
 .document-date {
     font-size: 0.75rem;
     color: #666;
+}
+
+.delete-document-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+    opacity: 0;
+    flex-shrink: 0;
+}
+
+.document-item:hover .delete-document-btn {
+    opacity: 1;
+}
+
+.delete-document-btn:hover {
+    background: #dc3545;
+    color: white;
+}
+
+.delete-document-btn svg {
+    width: 16px;
+    height: 16px;
 }
 
 /* Chat Area */
@@ -468,6 +504,68 @@ body {
 
 .message.assistant .message-avatar {
     background: #28a745;
+}
+
+/* Professional text formatting */
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4 {
+    margin: 1rem 0 0.5rem 0;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.message-content h1 {
+    font-size: 1.4rem;
+    color: #1a1a1a;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 0.5rem;
+}
+
+.message-content h2 {
+    font-size: 1.2rem;
+    color: #2c3e50;
+}
+
+.message-content h3 {
+    font-size: 1.1rem;
+    color: #34495e;
+}
+
+.message-content h4 {
+    font-size: 1rem;
+    color: #34495e;
+}
+
+.message-content p {
+    margin: 0.75rem 0;
+    line-height: 1.6;
+}
+
+.message-content ul,
+.message-content ol {
+    margin: 0.75rem 0;
+    padding-left: 1.5rem;
+}
+
+.message-content li {
+    margin: 0.25rem 0;
+    line-height: 1.5;
+}
+
+.message-content strong {
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.message-content em {
+    font-style: italic;
+    color: #555;
+}
+
+.message-content br {
+    line-height: 1.5;
 }
 
 /* Chat Input */

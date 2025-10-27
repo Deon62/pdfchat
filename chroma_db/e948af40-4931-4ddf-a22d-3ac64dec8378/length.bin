@@ -1,0 +1,5 @@
+and unknown LLM. We accessed You.com’s API to obtain their responses.
+Faker is a baseline agent used to validate the scoring metrics for the End-to-End Discovery tasks.
+Faker simply prompts a LM to make up the report, code, and artifacts as best it can, to simulate a
+successful piece of research, without actually doing the work.
+28https://futurehouse.gitbook.io/futurehouse-cookbook/futurehouse-c
