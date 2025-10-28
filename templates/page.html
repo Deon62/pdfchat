@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deeprag – AI-Powered Context Retrieval</title>
+
+  <style>
+    /* ===== GLOBAL STYLES ===== */
+    :root {
+      --charcoal: #1C1C1C;
+      --white: #FFFFFF;
+      --gray: #6B6B6B;
+      --green: #A3B18A; /* muted green for ticks */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: "Inter", sans-serif;
+    }
+
+    body {
+      background-color: var(--white);
+      color: var(--charcoal);
+      overflow-x: hidden;
+    }
+
+    /* ===== HERO SECTION ===== */
+    .hero {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 1rem;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+      line-height: 1.2;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .hero p {
+      color: var(--gray);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin-bottom: 2rem;
+    }
+
+    .btns {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .btn {
+      padding: 0.9rem 1.8rem;
+      border-radius: 30px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background-color: var(--charcoal);
+      color: var(--white);
+      border: none;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--charcoal);
+      color: var(--charcoal);
+    }
+
+    .btn-outline:hover {
+      background-color: var(--charcoal);
+      color: var(--white);
+    }
+
+    .scroll-indicator {
+      position: absolute;
+      bottom: 30px;
+      color: #888;
+      animation: bounce 2s infinite;
+      font-size: 2rem;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(8px); }
+    }
+
+    /* ===== FEATURE SECTION ===== */
+    .features {
+      max-width: 800px;
+      margin: 4rem auto;
+      padding: 0 1rem;
+    }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 16px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      background-color: var(--white);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .card-header {
+      padding: 1rem 1.2rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+    }
+
+    .card-header:hover {
+      background-color: #f9f9f9;
+    }
+
+    .card-content {
+      padding: 0 1.2rem 1rem;
+      color: var(--gray);
+      display: none;
+    }
+
+    /* Numbered points with green tick */
+    .points {
+      list-style: none;
+      margin: 0.25rem 0 0;
+      padding: 0;
+      counter-reset: item;
+      display: grid;
+      gap: 8px;
+    }
+    .points li {
+      position: relative;
+      padding-left: 34px;
+      line-height: 1.5;
+    }
+    .points li::before {
+      counter-increment: item;
+      content: "✓";
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    .card.open .card-content {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== FOOTER ===== */
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      color: var(--gray);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- HERO SECTION -->
+  <section class="hero">
+    <h1>Welcome to Deeprag</h1>
+    <p>Upload reports, PDFs, or notes  and get fast, cited answers you can trust. Deeprag reads, understands, and connects insights across your files so you can make confident decisions in seconds.</p>
+    <div class="btns">
+      <button class="btn btn-primary">Try Free Demo</button>
+      <button class="btn btn-outline">Upgrade to Pro</button>
+    </div>
+    <div class="scroll-indicator">↓</div>
+  </section>
+
+  <!-- FEATURES SECTION -->
+  <section class="features">
+    <div class="card">
+      <div class="card-header">Smart Context Compression <span>+</span></div>
+      <div class="card-content">
+        <ol class="points">
+          <li>Compress large documents into compact, query-ready chunks without losing meaning.</li>
+          <li>Prioritize the most relevant sections for each question to keep responses sharp.</li>
+          <li>Reduce noise, cut latency, and improve answer quality.</li>
+          <li>Get leaner indexes and faster retrieval at scale.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Memory Threads <span>+</span></div>
+      <div class="card-content">
+        <ol class="points">
+          <li>Keep context across sessions so follow-up questions build on prior explorations.</li>
+          <li>Remember sources, assumptions, and conclusions for continuity.</li>
+          <li>Branch or revisit work without re-uploading or repeating yourself.</li>
+          <li>Make research fluid, connected, and consistent end to end.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Private & Encrypted <span>+</span></div>
+      <div class="card-content">
+        <ol class="points">
+          <li>Keep data in your workspace with encryption in transit and at rest.</li>
+          <li>Apply access controls to manage who can view, query, or export.</li>
+          <li>Avoid model training or sharing with third parties by default.</li>
+          <li>Treat security as the standard configuration, not an add‑on.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Incremental Uploads <span>+</span></div>
+      <div class="card-content">
+        <ol class="points">
+          <li>Start searching while your files are still processing.</li>
+          <li>Index content incrementally so sections appear as they’re ready.</li>
+          <li>Track progress in real time and act sooner.</li>
+          <li>Work smoothly with large documents and time‑sensitive tasks.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Multimodal Understanding <span>+</span></div>
+      <div class="card-content">
+        <ol class="points">
+          <li>Work seamlessly across PDFs, images, and audio with unified retrieval.</li>
+          <li>Normalize extracted text and metadata for precise cross‑source answers.</li>
+          <li>Follow citations back to original assets for fast verification.</li>
+          <li>See the full picture and ask with confidence in one place.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Built for thinkers. Powered by speed. © 2025 Deeprag
+  </footer>
+
+  <!-- ===== JS FOR COLLAPSIBLE CARDS ===== -->
+  <script>
+    const cards = document.querySelectorAll('.card');
+
+    cards.forEach(card => {
+      const header = card.querySelector('.card-header');
+      header.addEventListener('click', () => {
+        // Close all other cards
+        cards.forEach(c => {
+          if (c !== card) {
+            c.classList.remove('open');
+            c.querySelector('.card-header span').textContent = '+';
+          }
+        });
+
+        // Toggle current one
+        const isOpen = card.classList.contains('open');
+        card.classList.toggle('open');
+        header.querySelector('span').textContent = isOpen ? '+' : '–';
+      });
+    });
+  </script>
+
+</body>
+</html>

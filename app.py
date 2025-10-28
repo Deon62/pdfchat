@@ -238,7 +238,7 @@ Context from document:
     
     messages.append({"role": "system", "content": system_message})
     
-    # Add conversation history
+    
     if conversation_history:
         for msg in conversation_history:
             if isinstance(msg, HumanMessage):
@@ -246,7 +246,7 @@ Context from document:
             elif isinstance(msg, AIMessage):
                 messages.append({"role": "assistant", "content": msg.content})
     
-    # Add current message
+   
     messages.append({"role": "user", "content": message})
     
     data = {
@@ -282,7 +282,7 @@ def debug_document(document_id):
     retriever = retrievers[document_id]
     
     try:
-        # Test basic retrieval
+
         test_docs = retriever.invoke("test")
         return jsonify({
             'document_id': document_id,
@@ -297,39 +297,37 @@ def debug_document(document_id):
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     try:
-        print("Upload endpoint called")  # Debug print
+        print("Upload endpoint called")  
         if 'file' not in request.files:
-            print("No file in request")  # Debug print
+            print("No file in request") 
             return jsonify({'error': 'No file provided'}), 400
         
         file = request.files['file']
-        print(f"File received: {file.filename}")  # Debug print
+        print(f"File received: {file.filename}")  
         if file.filename == '':
-            print("Empty filename")  # Debug print
+            print("Empty filename")  
             return jsonify({'error': 'No file selected'}), 400
         
         if file and allowed_file(file.filename):
-            print(f"File validation passed: {file.filename}")  # Debug print
-            # Generate unique ID for this document
+            print(f"File validation passed: {file.filename}")  
             doc_id = str(uuid.uuid4())
             filename = secure_filename(file.filename)
             filepath = os.path.join(UPLOAD_FOLDER, f"{doc_id}_{filename}")
             
-            # Save file
+          
             try:
                 file.save(filepath)
-                print(f"File saved to: {filepath}")  # Debug print
+                print(f"File saved to: {filepath}")
             except Exception as e:
-                print(f"Error saving file: {e}")  # Debug print
+                print(f"Error saving file: {e}")  
                 return jsonify({'error': f'Failed to save file: {str(e)}'}), 500
             
-            # Load and process PDF
             try:
                 loader = PyPDFLoader(filepath)
                 docs = loader.load()
-                print(f"PDF loaded, {len(docs)} pages")  # Debug print
+                print(f"PDF loaded, {len(docs)} pages") 
             except Exception as e:
-                print(f"Error loading PDF: {e}")  # Debug print
+                print(f"Error loading PDF: {e}")  
                 return jsonify({'error': f'Failed to load PDF: {str(e)}'}), 500
             
             try:
@@ -340,12 +338,12 @@ def upload_file():
                 )
                 
                 chunks = text_splitter.split_documents(docs)
-                print(f"PDF split into {len(chunks)} chunks")  # Debug print
+                print(f"PDF split into {len(chunks)} chunks") 
             except Exception as e:
-                print(f"Error splitting PDF: {e}")  # Debug print
+                print(f"Error splitting PDF: {e}")  
                 return jsonify({'error': f'Failed to process PDF: {str(e)}'}), 500
             
-            # Create vector store for this document
+           
             try:
                 collection_name = f"doc_{doc_id}"
                 vector_store = Chroma(
@@ -353,17 +351,17 @@ def upload_file():
                     embedding_function=embeddings,
                     persist_directory="chroma_db",
                 )
-                print(f"Vector store created: {collection_name}")  # Debug print
+                print(f"Vector store created: {collection_name}") 
                 
-                # Add documents to vector store
+              
                 vector_store.add_documents(documents=chunks)
-                print("Documents added to vector store")  # Debug print
+                print("Documents added to vector store") 
                 
-                # Create retriever with regular similarity search for now
+                
                 retriever = vector_store.as_retriever(
                     search_type="similarity",
                     search_kwargs={
-                        "k": 5  # Get more documents for better context
+                        "k": 5  
                     }
                 )
                 
