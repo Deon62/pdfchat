@@ -8,10 +8,25 @@ const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const documentList = document.getElementById('documentList');
 const loadingOverlay = document.getElementById('loadingOverlay');
+const sidebar = document.querySelector('.sidebar');
+const sidebarOverlay = document.getElementById('sidebarOverlay');
+const hamburgerBtn = document.getElementById('hamburgerBtn');
 
 // Initialize
 window.addEventListener('DOMContentLoaded', () => {
     loadDocuments();
+    if (hamburgerBtn) {
+        hamburgerBtn.addEventListener('click', () => {
+            if (sidebar && sidebar.classList.contains('open')) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
+        });
+    }
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', () => closeSidebar());
+    }
 });
 
 // Streaming helper
@@ -21,6 +36,35 @@ async function typeText(element, text, delay = 15) {
         element.textContent += text[i];
         chatMessages.scrollTop = chatMessages.scrollHeight;
         await new Promise(r => setTimeout(r, delay));
+    }
+}
+
+function openSidebar() {
+    if (!sidebar) return;
+    if (window.innerWidth <= 768) {
+        sidebar.classList.add('open');
+        if (sidebarOverlay) {
+            sidebarOverlay.style.display = 'block';
+            // delay to allow CSS transition
+            requestAnimationFrame(() => sidebarOverlay.classList.add('show'));
+        }
+        // prevent background scroll while menu is open
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeSidebar() {
+    if (!sidebar) return;
+    if (window.innerWidth <= 768) {
+        sidebar.classList.remove('open');
+        if (sidebarOverlay) {
+            sidebarOverlay.classList.remove('show');
+            setTimeout(() => {
+                sidebarOverlay.style.display = 'none';
+            }, 200);
+        }
+        // restore background scroll
+        document.body.style.overflow = '';
     }
 }
 
@@ -303,6 +347,7 @@ async function handleFileUpload(event) {
         saveDocuments();
         updateDocumentList();
         addMessage('assistant', `Successfully uploaded "${file.name}". You can now ask questions about it.`);
+        closeSidebar();
     } catch (error) {
         console.error('Upload error:', error);
         alert(`Failed to upload document: ${error.message}`);
@@ -482,6 +527,7 @@ function updateDocumentList() {
             currentDocument = doc;
             updateDocumentList();
             await loadChatHistory();
+            closeSidebar();
         });
         
         documentList.appendChild(item);

@@ -9,13 +9,17 @@ body {
     background: white;
     min-height: 100vh;
     color: #1a1a1a;
+    overflow-x: hidden;
 }
+
+html { overflow-x: hidden; }
 
 .container {
     max-width: 100%;
     margin: 0 auto;
     min-height: 100vh;
     display: flex;
+    overflow-x: hidden;
 }
 
 .upload-pdf-btn {
@@ -152,6 +156,47 @@ body {
     flex-direction: column;
     background: white;
     margin-left: 280px;
+}
+
+/* Mobile header base styles (hidden by default, shown in media query) */
+.mobile-header {
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e0e0e0;
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1200;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+
+.app-title {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.hamburger-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    background: #f8f8f8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 3px;
+    cursor: pointer;
+}
+
+.hamburger-btn span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: #1a1a1a;
+    border-radius: 2px;
 }
 
 .chat-messages {
@@ -707,15 +752,27 @@ body {
 }
 
 @media (max-width: 768px) {
+    .mobile-header { display: flex; }
+
     .sidebar {
-        width: 100%;
-        max-width: 100%;
-        position: relative;
-        max-height: 200px;
+        width: 80%;
+        max-width: 320px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 1300;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
     }
 
     .chat-area {
         margin-left: 0;
+        padding-top: 0;
     }
 
     .message {
@@ -728,4 +785,23 @@ body {
         height: 28px;
         font-size: 0.7rem;
     }
-} 
+}
+
+/* Sidebar overlay for mobile */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 1250;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.sidebar-overlay.show {
+    display: block !important;
+    opacity: 1;
+}
+
+html, body, .container {
+    overflow-x: hidden;
+}

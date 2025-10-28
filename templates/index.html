@@ -31,6 +31,13 @@
 
         <!-- Chat Area -->
         <main class="chat-area">
+            <div class="mobile-header">
+                <button id="hamburgerBtn" class="hamburger-btn" aria-label="Open menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
             <div class="chat-messages" id="chatMessages">
                 <div class="welcome-message">
                     <h2>Start a conversation</h2>
@@ -56,6 +63,7 @@
             </div>
         </main>
 
+        <div id="sidebarOverlay" class="sidebar-overlay" style="display: none;"></div>
         <!-- Loading Overlay -->
         <div class="loading-overlay" id="loadingOverlay" style="display: none;">
             <div class="spinner"></div>
