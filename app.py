@@ -267,6 +267,12 @@ def allowed_file(filename):
 
 @app.route('/')
 def index():
+    # Serve landing page
+    return render_template('page.html')
+
+@app.route('/app')
+def app_main():
+    # Serve the existing main application UI
     return render_template('index.html')
 
 @app.route('/api/test', methods=['GET'])
