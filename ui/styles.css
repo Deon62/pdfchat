@@ -1,3 +1,29 @@
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255,255,255,0.8);
+    border: 1px solid #e0e0e0;
+    color: #555;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.message:hover .copy-btn {
+    opacity: 1;
+}
+
+.copy-btn:hover {
+    background: #fff;
+    color: #1a1a1a;
+}
 * {
     margin: 0;
     padding: 0;
@@ -251,6 +277,7 @@ html {
     line-height: 1.6;
     width: fit-content;
     max-width: 90%;
+    position: relative; /* allow absolute-positioned copy button */
 }
 
 .message-avatar {

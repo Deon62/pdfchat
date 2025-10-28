@@ -129,6 +129,39 @@ function addAssistantThinking() {
     return { messageDiv, contentDiv, messageId };
 }
 
+function attachCopyButton(messageDiv, contentDiv, role) {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.setAttribute('aria-label', 'Copy');
+    btn.title = 'Copy';
+    btn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+    `;
+
+    btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+            let text = '';
+            if (role === 'assistant') {
+                const clone = contentDiv.cloneNode(true);
+                clone.querySelectorAll('.citations, .feedback-section').forEach(el => el.remove());
+                text = clone.innerText.trim();
+            } else {
+                text = contentDiv.innerText.trim();
+            }
+            await navigator.clipboard.writeText(text);
+            showToast('Copied to clipboard', 'success');
+        } catch (err) {
+            showToast('Copy failed', 'error');
+        }
+    });
+
+    messageDiv.appendChild(btn);
+}
+
 function addCitations(contentDiv, sources) {
     const citationsDiv = document.createElement('div');
     citationsDiv.className = 'citations';
@@ -468,6 +501,8 @@ async function sendMessage() {
         // Add feedback section for AI responses (after citations)
         setTimeout(() => {
             addFeedbackSection(thinkingContent, messageId);
+            const msgDiv = thinkingContent.closest('.message');
+            if (msgDiv) attachCopyButton(msgDiv, thinkingContent, 'assistant');
         }, 200); // Slightly longer delay to ensure citations are added first
     } catch (error) {
         console.error('Chat error:', error);
@@ -506,6 +541,9 @@ function addMessage(role, content) {
     // Add feedback section for AI responses
     if (role === 'assistant') {
         addFeedbackSection(contentDiv, messageId);
+        attachCopyButton(messageDiv, contentDiv, 'assistant');
+    } else {
+        attachCopyButton(messageDiv, contentDiv, 'user');
     }
 }
 
@@ -621,6 +659,12 @@ async function loadChatHistory() {
                         
                         // Add feedback section for AI responses
                         addFeedbackSection(contentDiv, messageId);
+                        attachCopyButton(messageDiv, contentDiv, 'assistant');
+                    }
+                    if (msg.role === 'user') {
+                        const { messageDiv: uDiv, contentDiv: uContent } = createMessage('user');
+                        uContent.textContent = msg.content;
+                        attachCopyButton(uDiv, uContent, 'user');
                     }
                 }
             } else {
