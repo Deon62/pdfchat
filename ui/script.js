@@ -345,6 +345,8 @@ async function handleFileUpload(event) {
     addMessage('assistant', `"${file.name}" added. I'm indexing it now — you can start chatting.`);
     closeSidebar();
     hideLoading();
+    // immediate success toast for perceived speed
+    showToast('Upload completed — now indexing', 'success');
 
     try {
         console.log('Sending upload request...'); // Debug log
@@ -375,7 +377,6 @@ async function handleFileUpload(event) {
         saveDocuments();
         updateDocumentList();
         addMessage('assistant', `"${file.name}" is ready. Ask your question.`);
-        showToast('Upload completed successfully ✅', 'success');
     } catch (error) {
         console.error('Upload error:', error);
         // rollback temp doc
