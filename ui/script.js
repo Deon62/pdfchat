@@ -318,7 +318,21 @@ async function handleFileUpload(event) {
     const formData = new FormData();
     formData.append('file', file);
 
-    showLoading('Uploading and processing your document...');
+    // optimistic add
+    const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const tempDoc = {
+        id: tempId,
+        name: file.name,
+        date: new Date().toISOString(),
+        status: 'indexing'
+    };
+    documents.push(tempDoc);
+    currentDocument = tempDoc;
+    saveDocuments();
+    updateDocumentList();
+    addMessage('assistant', `"${file.name}" added. I'm indexing it now — you can start chatting.`);
+    closeSidebar();
+    hideLoading();
 
     try {
         console.log('Sending upload request...'); // Debug log
@@ -336,20 +350,28 @@ async function handleFileUpload(event) {
         }
 
         const data = await response.json();
-        const newDoc = {
-            id: data.id,
-            name: file.name,
-            date: new Date().toISOString()
-        };
-
-        documents.push(newDoc);
-        currentDocument = newDoc;
+        const realId = data.id;
+        const idx = documents.findIndex(d => d.id === tempId);
+        if (idx !== -1) {
+            documents[idx].id = realId;
+            documents[idx].status = 'ready';
+        }
+        if (currentDocument && currentDocument.id === tempId) {
+            currentDocument.id = realId;
+            currentDocument.status = 'ready';
+        }
         saveDocuments();
         updateDocumentList();
-        addMessage('assistant', `Successfully uploaded "${file.name}". You can now ask questions about it.`);
-        closeSidebar();
+        addMessage('assistant', `"${file.name}" is ready. Ask your question.`);
     } catch (error) {
         console.error('Upload error:', error);
+        // rollback temp doc
+        documents = documents.filter(d => d.id !== tempId);
+        if (currentDocument && currentDocument.id === tempId) {
+            currentDocument = documents[documents.length - 1] || null;
+        }
+        saveDocuments();
+        updateDocumentList();
         alert(`Failed to upload document: ${error.message}`);
     } finally {
         hideLoading();
@@ -363,6 +385,11 @@ async function sendMessage() {
 
     if (!currentDocument) {
         alert('Please upload a PDF document first');
+        return;
+    }
+
+    if ((currentDocument.id && currentDocument.id.startsWith('temp_')) || currentDocument.status === 'indexing') {
+        addMessage('assistant', 'I\'m still indexing this document. You can ask now; answers may be partial until indexing completes.');
         return;
     }
 
