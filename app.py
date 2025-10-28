@@ -1,7 +1,8 @@
 import os
 import requests
 import json
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+
 from flask_cors import CORS
 from dotenv import load_dotenv
 from langchain_mistralai import MistralAIEmbeddings
@@ -22,7 +23,7 @@ CORS(app)
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
-# Configuration
+
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf'}
 
@@ -33,12 +34,12 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 embeddings = MistralAIEmbeddings(model="mistral-embed")
 
 retrievers = {}
-conversation_histories = {}  # Store chat histories per document
+conversation_histories = {} 
 
 def load_existing_retrievers():
     """Load existing retrievers from Chroma database on startup"""
     try:
-        # Get all collection names from the Chroma database
+       
         import chromadb
         client = chromadb.PersistentClient(path="chroma_db")
         collections = client.list_collections()
@@ -46,9 +47,9 @@ def load_existing_retrievers():
         for collection in collections:
             collection_name = collection.name
             if collection_name.startswith("doc_"):
-                doc_id = collection_name[4:]  # Remove "doc_" prefix
+                doc_id = collection_name[4:]  
                 
-                # Create retriever for this document
+               
                 vector_store = Chroma(
                     collection_name=collection_name,
                     embedding_function=embeddings,
@@ -58,7 +59,7 @@ def load_existing_retrievers():
                 retriever = vector_store.as_retriever(
                     search_type="similarity",
                     search_kwargs={
-                        "k": 5  # Get more documents for better context
+                        "k": 5  
                     }
                 )
                 
@@ -71,7 +72,7 @@ def load_existing_retrievers():
     except Exception as e:
         print(f"Error loading existing retrievers: {e}")
 
-# Load existing retrievers on startup
+
 load_existing_retrievers()
 
 def is_summarization_request(message):
@@ -109,7 +110,7 @@ def is_opinion_request(message):
 def extract_section_number(message):
     """Extract section/chapter number from the message"""
     import re
-    # Look for patterns like "section 9", "chapter 3", "part 2", etc.
+    
     patterns = [
         r'section\s+(\d+)',
         r'chapter\s+(\d+)',
@@ -132,19 +133,18 @@ def format_response_text(text):
     if not text:
         return text
     
-    # Convert markdown headers to HTML headers
+    
     text = re.sub(r'^# (.+)$', r'<h1>\1</h1>', text, flags=re.MULTILINE)
     text = re.sub(r'^## (.+)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
     text = re.sub(r'^### (.+)$', r'<h3>\1</h3>', text, flags=re.MULTILINE)
     text = re.sub(r'^#### (.+)$', r'<h4>\1</h4>', text, flags=re.MULTILINE)
     
-    # Convert bold text (**text** to <strong>text</strong>)
     text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
     
-    # Convert italic text (*text* to <em>text</em>)
+  
     text = re.sub(r'\*(.*?)\*', r'<em>\1</em>', text)
     
-    # Convert bullet points (- item to <li>item</li>)
+
     lines = text.split('\n')
     formatted_lines = []
     in_list = False
@@ -152,7 +152,7 @@ def format_response_text(text):
     for line in lines:
         stripped = line.strip()
         
-        # Check for bullet points
+      
         if stripped.startswith('- ') or stripped.startswith('* '):
             if not in_list:
                 formatted_lines.append('<ul>')
@@ -163,7 +163,7 @@ def format_response_text(text):
             if not in_list:
                 formatted_lines.append('<ol>')
                 in_list = True
-            # Extract number and text
+          
             match = re.match(r'^(\d+)\.\s*(.+)$', stripped)
             if match:
                 item_text = match.group(2).strip()
@@ -173,20 +173,17 @@ def format_response_text(text):
                 formatted_lines.append('</ul>' if any(line.startswith(('1. ', '2. ', '3. ', '4. ', '5. ', '6. ', '7. ', '8. ', '9. ')) for line in lines[lines.index(line):lines.index(line)+3]) else '</ul>')
                 in_list = False
             
-            # Regular paragraph
+      
             if stripped:
                 formatted_lines.append(f'<p>{line}</p>')
             else:
                 formatted_lines.append('<br>')
     
-    # Close any remaining list
+ 
     if in_list:
         formatted_lines.append('</ul>')
-    
-    # Join lines and clean up
     formatted_text = '\n'.join(formatted_lines)
     
-    # Clean up multiple consecutive <br> tags
     formatted_text = re.sub(r'(<br>\s*){3,}', '<br><br>', formatted_text)
     
     # Clean up empty paragraphs
@@ -202,10 +199,10 @@ def call_deepseek_api(message, context, conversation_history=None, is_summarizat
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
     }
     
-    # Build conversation context
+    
     messages = []
     
-    # Add system message with document context
+    
     if is_summarization and section_number:
         system_message = f"""You are an intelligent assistant that creates comprehensive summaries of specific sections from documents.
 Create a detailed summary of the requested section, organizing the information clearly and highlighting key points.
@@ -531,6 +528,166 @@ def chat():
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+@app.route('/api/chat/stream', methods=['POST'])
+def chat_stream():
+    """Stream tokens for chat responses while preserving retrieval and sources."""
+    data = request.json
+    message = data.get('message')
+    document_id = data.get('documentId')
+
+    if not message:
+        return jsonify({'error': 'No message provided'}), 400
+    if document_id not in retrievers:
+        return jsonify({'error': 'Document not found'}), 404
+
+    try:
+        retriever = retrievers[document_id]
+        chat_history = conversation_histories.get(document_id, ChatMessageHistory())
+
+        is_summarization = is_summarization_request(message)
+        is_chapter_count = is_chapter_count_request(message)
+        is_opinion = is_opinion_request(message)
+        section_number = extract_section_number(message) if is_summarization else None
+
+        # Retrieval
+        relevant_docs = retriever.invoke(message)
+        if not relevant_docs:
+            vectorstore = retriever.vectorstore
+            fallback = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+            relevant_docs = fallback.invoke(message)
+
+        context_parts = []
+        sources = []
+        for i, doc in enumerate(relevant_docs):
+            sources.append({
+                'index': i + 1,
+                'content': doc.page_content,
+                'page': doc.metadata.get('page', 'Unknown'),
+                'source': doc.metadata.get('source', 'Unknown')
+            })
+            context_parts.append(f"[Source {i+1}]\n{doc.page_content}")
+        context = "\n\n".join(context_parts)
+
+        # Build DeepSeek payload with streaming
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+        }
+
+        # Build messages like call_deepseek_api
+        system_message = f"""You are an intelligent assistant that provides comprehensive answers based on document context.
+Answer questions thoroughly using the provided context. Be insightful and analytical.
+If the context doesn't contain enough information, acknowledge this and provide what you can.
+Reference previous conversation context when relevant for better continuity.
+
+Context from document:
+{context}"""
+        if is_summarization and section_number:
+            system_message = f"""You are an intelligent assistant that creates comprehensive summaries of specific sections from documents.
+Create a detailed summary of the requested section, organizing the information clearly and highlighting key points.
+Use bullet points, headings, and clear structure to make the summary easy to read.
+Focus only on the content from the specified section.
+
+Context from document (Section {section_number}):
+{context}"""
+        elif is_chapter_count:
+            system_message = f"""You are an intelligent assistant that analyzes document structure and content.
+Analyze the provided context to determine the document's structure, including chapters, sections, and overall organization.
+Look for patterns like "Chapter X", "Section Y", numbered headings, or table of contents information.
+Provide a clear count of chapters/sections and describe the document's structure.
+
+Context from document:
+{context}"""
+        elif is_opinion:
+            system_message = f"""You are an intelligent assistant with deep knowledge and analytical capabilities.
+Based on the provided context, give your thoughtful opinion and analysis. Be insightful, critical when appropriate, and provide valuable perspectives.
+Draw from your knowledge while staying grounded in the provided context. Be confident in your analysis but acknowledge limitations.
+Provide nuanced, intelligent commentary that adds value beyond just summarizing.
+
+Context from document:
+{context}"""
+
+        messages = [{"role": "system", "content": system_message}]
+        for msg in chat_history.messages:
+            if isinstance(msg, HumanMessage):
+                messages.append({"role": "user", "content": msg.content})
+            elif isinstance(msg, AIMessage):
+                messages.append({"role": "assistant", "content": msg.content})
+        messages.append({"role": "user", "content": message})
+
+        payload = {
+            "model": "deepseek-chat",
+            "messages": messages,
+            "temperature": 0.1,
+            "max_tokens": 2000,
+            "stream": True,
+        }
+
+        def generate():
+            buffer = []
+            try:
+                with requests.post(url, headers=headers, json=payload, stream=True) as r:
+                    r.raise_for_status()
+                    for line in r.iter_lines(decode_unicode=True):
+                        if not line:
+                            continue
+                        if line.startswith('data: '):
+                            data_str = line[len('data: '):].strip()
+                        else:
+                            data_str = line.strip()
+                        if data_str == '[DONE]':
+                            break
+                        try:
+                            obj = json.loads(data_str)
+                            # OpenAI-style delta
+                            delta = obj.get('choices', [{}])[0].get('delta', {})
+                            content = delta.get('content', '')
+                            if content:
+                                buffer.append(content)
+                                yield content
+                        except Exception:
+                            # If not JSON, yield raw text
+                            buffer.append(data_str)
+                            yield data_str
+            except Exception as e:
+                yield f"\n[Stream error: {str(e)}]"
+
+            # After stream completes: save to history and emit sources marker
+            full_text = ''.join(buffer)
+            try:
+                formatted = format_response_text(full_text)
+                ai_message = AIMessage(content=formatted)
+                ai_message.additional_kwargs = {
+                    'sources': sources,
+                    'is_summarization': is_summarization,
+                    'section_number': section_number,
+                    'is_chapter_count': is_chapter_count,
+                    'is_opinion': is_opinion
+                }
+                chat_history.add_user_message(message)
+                chat_history.add_message(ai_message)
+                conversation_histories[document_id] = chat_history
+            except Exception:
+                pass
+
+            yield "\n[[SOURCES]]" + json.dumps({
+                'sources': sources,
+                'is_summarization': is_summarization,
+                'section_number': section_number,
+                'is_chapter_count': is_chapter_count,
+                'is_opinion': is_opinion
+            })
+
+        headers_out = {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+        }
+        return Response(stream_with_context(generate()), headers=headers_out)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/chat/history/<document_id>', methods=['GET'])
 def get_chat_history(document_id):

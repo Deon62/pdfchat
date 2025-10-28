@@ -448,70 +448,160 @@ async function sendMessage() {
     messageInput.disabled = true;
     sendBtn.disabled = true;
 
-    // Show assistant thinking placeholder
-    const { contentDiv: thinkingContent, messageId } = addAssistantThinking();
+    // Create assistant placeholder we will stream into (start with thinking UI)
+    const { messageDiv: streamMsgDiv, contentDiv: streamContent, messageId } = createMessage('assistant');
+    streamContent.innerHTML = `
+        <span class="thinking">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="thinking-text">Thinking...</span>
+        </span>
+    `;
 
     try {
-        const response = await fetch('/api/chat', {
+        // Try streaming endpoint first
+        const resp = await fetch('/api/chat/stream', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                message: message,
-                documentId: currentDocument.id
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, documentId: currentDocument.id })
         });
 
-        if (!response.ok) {
-            throw new Error('Chat request failed');
+        if (!resp.ok || !resp.body) {
+            throw new Error('Stream not available');
         }
 
-        const data = await response.json();
-        
-        // Check if this is a summarization response
-        if (data.is_summarization) {
-            // Replace the thinking bubble with summary mode
-            const messageDiv = thinkingContent.closest('.message');
-            messageDiv.classList.add('summary-mode');
-            
-            // Create summary content with formatted HTML
-            const formattedResponse = data.response || '';
-            thinkingContent.innerHTML = `
-                <div class="summary-header">
-                    <div class="summary-icon">📋</div>
-                    <span>Summary Mode</span>
-                    ${data.section_number ? `<span class="summary-section-badge">Section ${data.section_number}</span>` : ''}
-                </div>
-                <div class="summary-content">${formattedResponse}</div>
-            `;
-        } else {
-            // Regular response - display formatted HTML content
-            const formattedResponse = data.response || '';
-            thinkingContent.innerHTML = formattedResponse;
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let buffer = '';
+        let sourcesMeta = null;
+        let started = false;
+
+        while (!done) {
+            const { value, done: streamDone } = await reader.read();
+            done = streamDone;
+            if (value) {
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                const markerIndex = buffer.indexOf('[[SOURCES]]');
+                if (markerIndex !== -1) {
+                    const textPart = buffer.substring(0, markerIndex);
+                    const metaPart = buffer.substring(markerIndex + '[[SOURCES]]'.length).trim();
+                    try {
+                        const meta = JSON.parse(metaPart);
+                        sourcesMeta = meta;
+                    } catch {}
+                    // Render final content with markdown-lite formatting
+                    streamContent.innerHTML = renderMarkdownLite(textPart);
+                    break;
+                } else {
+                    // Progressive update with markdown-lite formatting
+                    if (!started) {
+                        // switch from thinking UI to plain text container
+                        streamContent.textContent = '';
+                        started = true;
+                    }
+                    streamContent.innerHTML = renderMarkdownLite(buffer);
+                }
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
         }
-        
-        // Add citations if available (after streaming is complete)
-        if (data.sources && data.sources.length > 0) {
-            setTimeout(() => {
-                addCitations(thinkingContent, data.sources);
-            }, 100); // Small delay to ensure streaming is complete
+
+        // If no marker encountered but stream ended, finalize
+        if (!sourcesMeta) {
+            streamContent.innerHTML = renderMarkdownLite(buffer);
         }
-        
-        // Add feedback section for AI responses (after citations)
-        setTimeout(() => {
-            addFeedbackSection(thinkingContent, messageId);
-            const msgDiv = thinkingContent.closest('.message');
-            if (msgDiv) attachCopyButton(msgDiv, thinkingContent, 'assistant');
-        }, 200); // Slightly longer delay to ensure citations are added first
+
+        // Attach citations and feedback if metadata present
+        if (sourcesMeta && sourcesMeta.sources && sourcesMeta.sources.length > 0) {
+            addCitations(streamContent, sourcesMeta.sources);
+        }
+        addFeedbackSection(streamContent, messageId);
+        attachCopyButton(streamMsgDiv, streamContent, 'assistant');
     } catch (error) {
         console.error('Chat error:', error);
-        thinkingContent.textContent = 'Sorry, I encountered an error. Please try again.';
+        // Fallback to non-streaming call
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, documentId: currentDocument.id })
+            });
+            if (!response.ok) throw new Error('Chat request failed');
+            const data = await response.json();
+            const formattedResponse = data.response || '';
+            // data.response from backend is already HTML; keep as-is
+            streamContent.innerHTML = formattedResponse;
+            if (data.sources && data.sources.length > 0) {
+                addCitations(streamContent, data.sources);
+            }
+            addFeedbackSection(streamContent, messageId);
+            attachCopyButton(streamMsgDiv, streamContent, 'assistant');
+        } catch (e2) {
+            streamContent.textContent = 'Sorry, I encountered an error. Please try again.';
+        }
     } finally {
         messageInput.disabled = false;
         sendBtn.disabled = false;
         messageInput.focus();
     }
+}
+
+// Lightweight markdown renderer for streaming (headings, bold/italic, lists, paragraphs)
+function renderMarkdownLite(text) {
+    if (!text) return '';
+    const escape = (s) => s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    let src = escape(text);
+    // headings
+    src = src.replace(/^####\s+(.*)$/gm, '<h4>$1</h4>')
+             .replace(/^###\s+(.*)$/gm, '<h3>$1</h3>')
+             .replace(/^##\s+(.*)$/gm, '<h2>$1</h2>')
+             .replace(/^#\s+(.*)$/gm, '<h1>$1</h1>');
+    // bold/italic
+    src = src.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+             .replace(/\*(.*?)\*/g, '<em>$1</em>');
+    // lists (simple, continuous blocks)
+    const lines = src.split('\n');
+    let out = [];
+    let inUL = false, inOL = false;
+    const closeLists = () => {
+        if (inUL) { out.push('</ul>'); inUL = false; }
+        if (inOL) { out.push('</ol>'); inOL = false; }
+    };
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        if (/^<h[1-4]>/.test(trimmed)) { // already converted heading
+            closeLists();
+            out.push(trimmed);
+            continue;
+        }
+        const ulMatch = /^[-*]\s+(.*)/.exec(trimmed);
+        const olMatch = /^(\d+)\.\s+(.*)/.exec(trimmed);
+        if (ulMatch) {
+            if (!inUL) { closeLists(); out.push('<ul>'); inUL = true; }
+            out.push(`<li>${ulMatch[1]}</li>`);
+            continue;
+        }
+        if (olMatch) {
+            if (!inOL) { closeLists(); out.push('<ol>'); inOL = true; }
+            out.push(`<li>${olMatch[2]}</li>`);
+            continue;
+        }
+        if (trimmed === '') {
+            closeLists();
+            out.push('<br>');
+        } else {
+            closeLists();
+            out.push(`<p>${trimmed}</p>`);
+        }
+    }
+    closeLists();
+    return out.join('\n');
 }
 
 function handleKeyDown(event) {
