@@ -431,7 +431,7 @@ async function sendMessage() {
     if (!message) return;
 
     if (!currentDocument) {
-        alert('Please upload a PDF document first');
+        promptUploadFirst();
         return;
     }
 
@@ -810,47 +810,95 @@ function formatDate(dateString) {
     });
 }
 
-// Document deletion function
+// In-page confirmation modal for document deletion
+let __pendingDeleteId = null;
+
+function openConfirmModal(title, text, onConfirm, options = {}) {
+    const overlay = document.getElementById('confirmOverlay');
+    const titleEl = document.getElementById('confirmTitle');
+    const textEl = document.getElementById('confirmText');
+    const btnCancel = document.getElementById('confirmCancel');
+    const btnConfirm = document.getElementById('confirmConfirm');
+
+    if (!overlay || !btnCancel || !btnConfirm) return;
+
+    titleEl.textContent = title || 'Confirm action';
+    textEl.textContent = text || 'Are you sure?';
+    const confirmLabel = options.confirmLabel || 'Confirm';
+    const cancelLabel = options.cancelLabel || 'Cancel';
+    btnConfirm.textContent = confirmLabel;
+    btnCancel.textContent = cancelLabel;
+
+    const close = () => {
+        overlay.classList.remove('show');
+        overlay.setAttribute('aria-hidden', 'true');
+        btnCancel.onclick = null;
+        btnConfirm.onclick = null;
+        document.body.style.overflow = '';
+    };
+
+    btnCancel.onclick = close;
+    btnConfirm.onclick = async () => {
+        try {
+            await onConfirm();
+            close();
+        } catch (e) {
+            close();
+        }
+    };
+
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+// Document deletion function using modal
 async function deleteDocument(docId, event) {
     // Prevent the document click event from firing
-    event.stopPropagation();
-    
-    // Confirm deletion
-    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/documents/${docId}`, {
-            method: 'DELETE'
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to delete document');
-        }
-        
-        // Remove from local documents array
-        documents = documents.filter(doc => doc.id !== docId);
-        
-        // If this was the current document, clear it
-        if (currentDocument && currentDocument.id === docId) {
-            currentDocument = null;
-            chatMessages.innerHTML = `
-                <div class="welcome-message">
-                    <h2>Start a conversation</h2>
-                    <p>Upload a PDF document to begin chatting with it</p>
-                </div>
-            `;
-        }
-        
-        // Update the document list
-        updateDocumentList();
-        
-        // Save updated documents to localStorage
-        saveDocuments();
-        
-    } catch (error) {
-        console.error('Error deleting document:', error);
-        alert('Failed to delete document. Please try again.');
-    }
+    if (event) event.stopPropagation();
+    __pendingDeleteId = docId;
+
+    openConfirmModal(
+        'Delete document?',
+        'Are you sure you want to delete this document? This action cannot be undone.',
+        async () => {
+            const id = __pendingDeleteId;
+            __pendingDeleteId = null;
+            try {
+                const response = await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error('Failed to delete document');
+                // Remove from local documents array
+                documents = documents.filter(doc => doc.id !== id);
+                // If this was the current document, clear it
+                if (currentDocument && currentDocument.id === id) {
+                    currentDocument = null;
+                    chatMessages.innerHTML = `
+                        <div class="welcome-message">
+                            <h2>Start a conversation</h2>
+                            <p>Upload a PDF document to begin chatting with it</p>
+                        </div>
+                    `;
+                }
+                saveDocuments();
+                updateDocumentList();
+                showToast('Document deleted', 'success');
+            } catch (error) {
+                console.error('Error deleting document:', error);
+                showToast('Failed to delete document', 'error');
+            }
+        },
+        { confirmLabel: 'Delete', cancelLabel: 'Cancel' }
+    );
+}
+
+// Prompt to upload when trying to send without a PDF
+function promptUploadFirst() {
+    openConfirmModal(
+        'No document yet',
+        'Upload a PDF to start chatting.',
+        () => {
+            openFileInput();
+        },
+        { confirmLabel: 'Upload PDF', cancelLabel: 'Cancel' }
+    );
 }
