@@ -11,6 +11,7 @@ const loadingOverlay = document.getElementById('loadingOverlay');
 const sidebar = document.querySelector('.sidebar');
 const sidebarOverlay = document.getElementById('sidebarOverlay');
 const hamburgerBtn = document.getElementById('hamburgerBtn');
+const toastEl = document.getElementById('toast');
 
 // Initialize
 window.addEventListener('DOMContentLoaded', () => {
@@ -37,6 +38,17 @@ async function typeText(element, text, delay = 15) {
         chatMessages.scrollTop = chatMessages.scrollHeight;
         await new Promise(r => setTimeout(r, delay));
     }
+}
+
+// Toast utility
+function showToast(message, type = 'success', duration = 2200) {
+    if (!toastEl) return;
+    toastEl.textContent = message;
+    toastEl.className = `toast ${type} show`;
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => {
+        toastEl.classList.remove('show');
+    }, duration);
 }
 
 function openSidebar() {
@@ -363,6 +375,7 @@ async function handleFileUpload(event) {
         saveDocuments();
         updateDocumentList();
         addMessage('assistant', `"${file.name}" is ready. Ask your question.`);
+        showToast('Upload completed successfully ✅', 'success');
     } catch (error) {
         console.error('Upload error:', error);
         // rollback temp doc
@@ -372,7 +385,7 @@ async function handleFileUpload(event) {
         }
         saveDocuments();
         updateDocumentList();
-        alert(`Failed to upload document: ${error.message}`);
+        showToast('Upload failed. Please try again.', 'error');
     } finally {
         hideLoading();
     }
