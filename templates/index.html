@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Chat Assistant</title>
     <link rel="stylesheet" href="/ui/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
 </head>
 <body>
     <div class="container">
@@ -86,5 +88,39 @@
     </div>
 
     <script src="/ui/script.js"></script>
+
+    <!-- PDF Viewer Overlay -->
+    <div id="pdfViewerOverlay" class="pdf-viewer-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+        <div class="pdf-viewer-modal" role="document">
+            <div class="pdf-viewer-header">
+                <div class="pdf-viewer-title" id="pdfViewerTitle">Document</div>
+                <div class="pdf-viewer-controls">
+                    <button id="pdfViewerPrev" class="pdf-viewer-nav-btn" type="button" aria-label="Previous page">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15,18 9,12 15,6"></polyline>
+                        </svg>
+                    </button>
+                    <span class="pdf-viewer-page-info">
+                        <input type="number" id="pdfViewerPageNum" min="1" value="1" class="pdf-viewer-page-input">
+                        / <span id="pdfViewerPageCount">1</span>
+                    </span>
+                    <button id="pdfViewerNext" class="pdf-viewer-nav-btn" type="button" aria-label="Next page">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9,18 15,12 9,6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+                <button id="pdfViewerClose" class="pdf-viewer-close" type="button" aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="pdf-viewer-body" id="pdfViewerBody">
+                <div id="pdfViewerCanvasContainer" style="width:100%; height:100%; overflow:auto;"></div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

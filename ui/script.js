@@ -398,14 +398,17 @@ async function handleFileUpload(event) {
 
         const data = await response.json();
         const realId = data.id;
+        const serverFilename = data.server_filename;
         const idx = documents.findIndex(d => d.id === tempId);
         if (idx !== -1) {
             documents[idx].id = realId;
             documents[idx].status = 'ready';
+            documents[idx].server_filename = serverFilename;
         }
         if (currentDocument && currentDocument.id === tempId) {
             currentDocument.id = realId;
             currentDocument.status = 'ready';
+            currentDocument.server_filename = serverFilename;
         }
         saveDocuments();
         updateDocumentList();
@@ -682,26 +685,77 @@ function updateDocumentList() {
                 <div class="document-name">${doc.name}</div>
                 <div class="document-date">${formatDate(doc.date)}</div>
             </div>
-            <button class="delete-document-btn" onclick="deleteDocument('${doc.id}', event)" title="Delete document">
+            <button class="document-menu-btn" aria-label="More options" aria-haspopup="menu" aria-expanded="false">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3,6 5,6 21,6"></polyline>
-                    <path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"></path>
-                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                    <circle cx="12" cy="12" r="1"></circle>
+                    <circle cx="12" cy="5" r="1"></circle>
+                    <circle cx="12" cy="19" r="1"></circle>
                 </svg>
             </button>
+            <div class="document-menu" role="menu">
+                <button class="document-menu-item view-pdf" role="menuitem">View PDF</button>
+                <button class="document-menu-item delete" role="menuitem">Delete</button>
+            </div>
         `;
         
-        item.addEventListener('click', async () => {
+        item.addEventListener('click', async (e) => {
+            // Prevent opening doc when clicking menu
+            if (e.target.closest('.document-menu-btn') || e.target.closest('.document-menu')) return;
             currentDocument = doc;
             updateDocumentList();
             await loadChatHistory();
             closeSidebar();
         });
         
+        // Menu toggle
+        const menuBtn = item.querySelector('.document-menu-btn');
+        const menu = item.querySelector('.document-menu');
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = menu.classList.contains('show');
+            // Close all other menus
+            document.querySelectorAll('.document-menu.show').forEach(m => {
+                m.classList.remove('show');
+                m.previousElementSibling.setAttribute('aria-expanded', 'false');
+            });
+            if (!isOpen) {
+                menu.classList.add('show');
+                menuBtn.setAttribute('aria-expanded', 'true');
+            }
+        });
+        
+        // Menu actions
+        const viewBtn = menu.querySelector('.view-pdf');
+        const deleteBtn = menu.querySelector('.delete');
+        viewBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.classList.remove('show');
+            menuBtn.setAttribute('aria-expanded', 'false');
+            openPdfViewer(doc);
+        });
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.classList.remove('show');
+            menuBtn.setAttribute('aria-expanded', 'false');
+            deleteDocument(doc.id, e);
+        });
+        
         documentList.appendChild(item);
     });
 }
+
+// Close menus when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.document-menu-btn') && !e.target.closest('.document-menu')) {
+        document.querySelectorAll('.document-menu.show').forEach(menu => {
+            menu.classList.remove('show');
+            const btn = menu.previousElementSibling;
+            if (btn && btn.classList.contains('document-menu-btn')) {
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+});
 
 async function loadChatHistory() {
     if (!currentDocument) return;
@@ -901,4 +955,106 @@ function promptUploadFirst() {
         },
         { confirmLabel: 'Upload PDF', cancelLabel: 'Cancel' }
     );
+}
+
+// PDF Viewer
+let __currentPdfDoc = null;
+let __currentPdfPageNum = 1;
+let __currentPdfRendering = false;
+
+// Configure PDF.js worker
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+async function openPdfViewer(doc) {
+    const overlay = document.getElementById('pdfViewerOverlay');
+    const titleEl = document.getElementById('pdfViewerTitle');
+    const bodyEl = document.getElementById('pdfViewerBody');
+    const closeBtn = document.getElementById('pdfViewerClose');
+    const canvasContainer = document.getElementById('pdfViewerCanvasContainer');
+    const prevBtn = document.getElementById('pdfViewerPrev');
+    const nextBtn = document.getElementById('pdfViewerNext');
+    const pageNumInput = document.getElementById('pdfViewerPageNum');
+    const pageCountEl = document.getElementById('pdfViewerPageCount');
+
+    if (!overlay || !titleEl || !bodyEl || !closeBtn || !canvasContainer) return;
+
+    titleEl.textContent = doc.name;
+    // Clear previous content
+    canvasContainer.innerHTML = '';
+    // Create canvas for PDF rendering
+    const canvas = document.createElement('canvas');
+    canvas.id = 'pdfViewerCanvas';
+    canvasContainer.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    const close = () => {
+        overlay.classList.remove('show');
+        overlay.setAttribute('aria-hidden', 'true');
+        closeBtn.onclick = null;
+        prevBtn.onclick = null;
+        nextBtn.onclick = null;
+        pageNumInput.onchange = null;
+        document.body.style.overflow = '';
+        __currentPdfDoc = null;
+    };
+
+    const goToPage = async (num) => {
+        if (!__currentPdfDoc || num < 1 || num > __currentPdfDoc.numPages) return;
+        __currentPdfPageNum = num;
+        pageNumInput.value = num;
+        prevBtn.disabled = num <= 1;
+        nextBtn.disabled = num >= __currentPdfDoc.numPages;
+        await renderPdfPage(__currentPdfDoc, num, canvas, ctx);
+    };
+
+    closeBtn.onclick = close;
+    prevBtn.onclick = () => goToPage(__currentPdfPageNum - 1);
+    nextBtn.onclick = () => goToPage(__currentPdfPageNum + 1);
+    pageNumInput.onchange = () => goToPage(parseInt(pageNumInput.value, 10) || 1);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    }, { once: true });
+
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+
+    // Load and render PDF
+    try {
+        let serverFilename = doc.server_filename;
+        // Fallback for legacy documents: reconstruct server filename from id and name
+        if (!serverFilename && doc.id && doc.name) {
+            serverFilename = `${doc.id}_${doc.name}`;
+        }
+        if (!serverFilename) {
+            canvasContainer.innerHTML = '<p>File not found on server.</p>';
+            return;
+        }
+        const url = `/uploads/${serverFilename}`;
+        const loadingTask = pdfjsLib.getDocument(url);
+        const pdfDoc = await loadingTask.promise;
+        __currentPdfDoc = pdfDoc;
+        pageCountEl.textContent = pdfDoc.numPages;
+        await goToPage(1);
+    } catch (e) {
+        console.error('Failed to load PDF:', e);
+        canvasContainer.innerHTML = '<p>Failed to load PDF.</p>';
+    }
+}
+
+async function renderPdfPage(pdfDoc, pageNum, canvas, ctx) {
+    if (__currentPdfRendering) return;
+    __currentPdfRendering = true;
+    try {
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        const renderContext = { canvasContext: ctx, viewport };
+        await page.render(renderContext).promise;
+    } finally {
+        __currentPdfRendering = false;
+    }
 }

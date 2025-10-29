@@ -2,7 +2,7 @@ import os
 import io
 import requests
 import json
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_file
 
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -353,6 +353,16 @@ def app_main():
     # Serve the existing main application UI
     return render_template('index.html')
 
+@app.route('/uploads/<path:filename>')
+def serve_uploaded_file(filename):
+    """Serve uploaded PDF files for PDF.js viewer."""
+    print(f"UPLOAD_FOLDER is: {UPLOAD_FOLDER}")
+    target_path = os.path.normpath(os.path.join(UPLOAD_FOLDER, filename))
+    print(f"Requested file: {filename}, resolved path: {target_path}, exists: {os.path.isfile(target_path)}")
+    if not os.path.isfile(target_path):
+        return jsonify({'error': 'File not found'}), 404
+    return send_file(target_path, mimetype='application/pdf')
+
 @app.route('/api/test', methods=['GET'])
 def test():
     return jsonify({'status': 'ok', 'message': 'API is working'})
@@ -395,8 +405,11 @@ def upload_file():
         if file and allowed_file(file.filename):
             print(f"File validation passed: {file.filename}")  
             doc_id = str(uuid.uuid4())
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(UPLOAD_FOLDER, f"{doc_id}_{filename}")
+            original_filename = secure_filename(file.filename)
+            filename = f"{doc_id}_{original_filename}"
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            
+            print(f"Saving file as: {filename}")  # Debug line
             
           
             try:
@@ -462,10 +475,11 @@ def upload_file():
                
                 conversation_histories[doc_id] = ChatMessageHistory()
                 
-                print(f"Upload successful for: {filename}")
+                print(f"Upload successful for: {original_filename}")
                 return jsonify({
                     'id': doc_id,
-                    'filename': filename,
+                    'filename': original_filename,
+                    'server_filename': filename,
                     'message': 'File uploaded and processed successfully'
                 })
             except Exception as e:
