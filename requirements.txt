@@ -11,3 +11,8 @@ pypdf
 flask
 flask-cors
 requests
+
+# OCR for images in PDFs
+pymupdf
+pytesseract
+Pillow

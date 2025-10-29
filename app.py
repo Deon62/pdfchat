@@ -1,4 +1,5 @@
 import os
+import io
 import requests
 import json
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
@@ -12,8 +13,18 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.documents import Document
 import uuid
 from werkzeug.utils import secure_filename
+try:
+    import fitz  # PyMuPDF
+    import pytesseract
+    from PIL import Image
+except Exception:
+    # Optional dependencies; OCR will be skipped if not available
+    fitz = None
+    pytesseract = None
+    Image = None
 
 load_dotenv()
 
@@ -191,6 +202,73 @@ def format_response_text(text):
     
     return formatted_text
 
+def _configure_tesseract():
+    """Configure pytesseract path from env on Windows if provided."""
+    if pytesseract is None:
+        return
+    cmd = os.getenv('TESSERACT_CMD')
+    if cmd and os.path.exists(cmd):
+        pytesseract.pytesseract.tesseract_cmd = cmd
+    else:
+        # Best-effort default path on Windows
+        default_win = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+        if os.name == 'nt' and os.path.exists(default_win):
+            pytesseract.pytesseract.tesseract_cmd = default_win
+
+def ocr_images_from_pdf(pdf_path):
+    """Extract text from images in a PDF using PyMuPDF + Tesseract.
+    Returns a list of LangChain Document objects with OCR text.
+    """
+    if fitz is None or pytesseract is None or Image is None:
+        print("OCR dependencies not installed; skipping image OCR")
+        return []
+
+    _configure_tesseract()
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        print(f"Failed to open PDF for OCR: {e}")
+        return []
+
+    ocr_docs = []
+    for page_index, page in enumerate(doc):
+        try:
+            images = page.get_images(full=True)
+        except Exception as e:
+            print(f"Failed to enumerate images on page {page_index+1}: {e}")
+            continue
+        if not images:
+            continue
+        for img_index, img in enumerate(images):
+            try:
+                xref = img[0]
+                base_image = doc.extract_image(xref)
+                image_bytes = base_image.get("image")
+                if not image_bytes:
+                    continue
+                pil_img = Image.open(io.BytesIO(image_bytes))
+                ocr_text = pytesseract.image_to_string(pil_img) or ""
+                ocr_text = ocr_text.strip()
+                if not ocr_text:
+                    continue
+                content = f"[Image OCR on page {page_index+1}]\n{ocr_text}"
+                ocr_docs.append(
+                    Document(
+                        page_content=content,
+                        metadata={
+                            'page': page_index + 1,
+                            'source': pdf_path,
+                            'type': 'image_ocr',
+                            'image_index': img_index + 1
+                        }
+                    )
+                )
+            except Exception as e:
+                print(f"OCR failed on page {page_index+1} image {img_index+1}: {e}")
+                continue
+    print(f"OCR produced {len(ocr_docs)} image-derived snippets")
+    return ocr_docs
+
 def call_deepseek_api(message, context, conversation_history=None, is_summarization=False, section_number=None, is_chapter_count=False, is_opinion=False):
     """Direct API call to DeepSeek with conversation history"""
     url = "https://api.deepseek.com/v1/chat/completions"
@@ -345,6 +423,14 @@ def upload_file():
                 
                 chunks = text_splitter.split_documents(docs)
                 print(f"PDF split into {len(chunks)} chunks") 
+                # Append OCR text extracted from images to the chunks so the retriever can answer about images
+                try:
+                    ocr_docs = ocr_images_from_pdf(filepath)
+                    if ocr_docs:
+                        chunks.extend(ocr_docs)
+                        print(f"Appended {len(ocr_docs)} OCR chunks; total chunks now {len(chunks)}")
+                except Exception as e:
+                    print(f"Skipping OCR due to error: {e}")
             except Exception as e:
                 print(f"Error splitting PDF: {e}")  
                 return jsonify({'error': f'Failed to process PDF: {str(e)}'}), 500
@@ -431,7 +517,7 @@ def chat():
             for query in search_queries:
                 docs = retriever.invoke(query)
                 all_docs.extend(docs)
-                
+
             seen_content = set()
             relevant_docs = []
             for doc in all_docs:
