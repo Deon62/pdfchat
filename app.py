@@ -373,30 +373,30 @@ def upload_file():
                 
                 retrievers[doc_id] = retriever
                 
-                # Initialize conversation history for this document
+               
                 conversation_histories[doc_id] = ChatMessageHistory()
                 
-                print(f"Upload successful for: {filename}")  # Debug print
+                print(f"Upload successful for: {filename}")
                 return jsonify({
                     'id': doc_id,
                     'filename': filename,
                     'message': 'File uploaded and processed successfully'
                 })
             except Exception as e:
-                print(f"Error creating vector store: {e}")  # Debug print
+                print(f"Error creating vector store: {e}")  
                 return jsonify({'error': f'Failed to create vector store: {str(e)}'}), 500
         
         return jsonify({'error': 'Invalid file type'}), 400
     
     except Exception as e:
-        print(f"Unexpected error in upload: {e}")  # Debug print
+        print(f"Unexpected error in upload: {e}") 
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    print("Chat endpoint called")  # Debug print
+    print("Chat endpoint called")  
     data = request.json
-    print(f"Request data: {data}")  # Debug print
+    print(f"Request data: {data}") 
     message = data.get('message')
     document_id = data.get('documentId')
     
@@ -408,19 +408,16 @@ def chat():
         return jsonify({'error': 'Document not found'}), 404
     
     try:
-        # Get retriever and conversation history for this document
         retriever = retrievers[document_id]
         chat_history = conversation_histories.get(document_id, ChatMessageHistory())
-        
-        # Check what type of request this is
         is_summarization = is_summarization_request(message)
         is_chapter_count = is_chapter_count_request(message)
         is_opinion = is_opinion_request(message)
         section_number = extract_section_number(message) if is_summarization else None
         
-        # Retrieve relevant documents with better search
+        
         if is_chapter_count:
-            # For chapter count requests, search for structural information
+            
             search_queries = [
                 message,
                 "table of contents",
@@ -434,7 +431,7 @@ def chat():
             for query in search_queries:
                 docs = retriever.invoke(query)
                 all_docs.extend(docs)
-            # Remove duplicates and get unique documents
+                
             seen_content = set()
             relevant_docs = []
             for doc in all_docs:
