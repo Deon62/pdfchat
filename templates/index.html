@@ -7,6 +7,37 @@
     <link rel="stylesheet" href="/ui/styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
+    <style>
+        /* PDFViewer container overrides */
+        #pdfViewerContainer {
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background: #525659;
+        }
+        .pdfViewer {
+            width: 100%;
+            height: auto;
+            display: block;
+            background: #525659;
+        }
+        .page {
+            margin: 16px auto;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        /* Mobile: full viewport */
+        @media (max-width: 768px) {
+            #pdfViewerContainer {
+                width: 100vw;
+                height: 100vh;
+            }
+            .page {
+                margin: 8px auto;
+                max-width: calc(100% - 16px);
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -51,7 +82,7 @@
                 <div class="input-container">
                     <textarea 
                         id="messageInput" 
-                        placeholder="Type your message... (Try: 'Summarize section 9' or 'Give me a summary of chapter 3')"
+                        placeholder="Type your message..."
                         rows="1"
                         onkeydown="handleKeyDown(event)"
                     ></textarea>
@@ -75,6 +106,13 @@
 
     <div id="toast" class="toast"></div>
 
+        <!-- Scroll to Bottom Button -->
+        <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" type="button" aria-label="Scroll to bottom">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6,9 12,15 18,9"></polyline>
+            </svg>
+        </button>
+
     <!-- Confirmation Modal -->
     <div id="confirmOverlay" class="confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true">
         <div class="confirm-modal" role="document">
@@ -89,36 +127,45 @@
 
     <script src="/ui/script.js"></script>
 
-    <!-- PDF Viewer Overlay -->
-    <div id="pdfViewerOverlay" class="pdf-viewer-overlay" aria-hidden="true" role="dialog" aria-modal="true">
-        <div class="pdf-viewer-modal" role="document">
-            <div class="pdf-viewer-header">
-                <div class="pdf-viewer-title" id="pdfViewerTitle">Document</div>
-                <div class="pdf-viewer-controls">
-                    <button id="pdfViewerPrev" class="pdf-viewer-nav-btn" type="button" aria-label="Previous page">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="15,18 9,12 15,6"></polyline>
-                        </svg>
-                    </button>
-                    <span class="pdf-viewer-page-info">
-                        <input type="number" id="pdfViewerPageNum" min="1" value="1" class="pdf-viewer-page-input">
-                        / <span id="pdfViewerPageCount">1</span>
-                    </span>
-                    <button id="pdfViewerNext" class="pdf-viewer-nav-btn" type="button" aria-label="Next page">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9,18 15,12 9,6"></polyline>
-                        </svg>
-                    </button>
-                </div>
-                <button id="pdfViewerClose" class="pdf-viewer-close" type="button" aria-label="Close">
+    <!-- PDF Viewer Fullscreen -->
+    <div id="pdfViewerOverlay" class="pdf-viewer-overlay" aria-hidden="true" style="display:none;">
+        <div class="pdf-viewer-header">
+            <div class="pdf-viewer-title" id="pdfViewerTitle">Document</div>
+            <div class="pdf-viewer-controls">
+                <button id="pdfViewerPrev" class="pdf-viewer-nav-btn" type="button" aria-label="Previous page">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                        <polyline points="15,18 9,12 15,6"></polyline>
+                    </svg>
+                </button>
+                <span class="pdf-viewer-page-info">
+                    <input type="number" id="pdfViewerPageNum" min="1" value="1" class="pdf-viewer-page-input">
+                    / <span id="pdfViewerPageCount">1</span>
+                </span>
+                <button id="pdfViewerNext" class="pdf-viewer-nav-btn" type="button" aria-label="Next page">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9,18 15,12 9,6"></polyline>
                     </svg>
                 </button>
             </div>
-            <div class="pdf-viewer-body" id="pdfViewerBody">
-                <div id="pdfViewerCanvasContainer" style="width:100%; height:100%; overflow:auto;"></div>
+            <button id="pdfViewerClose" class="pdf-viewer-close" type="button" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="pdf-viewer-body" id="pdfViewerBody">
+            <div id="pdfViewerContainer" class="pdfViewerContainer"><div class="pdfViewer" id="pdfViewer"></div></div>
+            <!-- Ask DeepRAG prompt -->
+            <div id="pdfAskPrompt" class="pdf-ask-prompt" style="display:none;">
+                <div class="pdf-ask-prompt-content">
+                    <div class="pdf-ask-prompt-text">Ask DeepRAG about this selection</div>
+                    <input type="text" id="pdfAskInput" class="pdf-ask-input" placeholder="Your question..." />
+                    <div class="pdf-ask-actions">
+                        <button id="pdfAskCancel" class="pdf-ask-btn pdf-ask-cancel">Cancel</button>
+                        <button id="pdfAskSend" class="pdf-ask-btn pdf-ask-send">Ask</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

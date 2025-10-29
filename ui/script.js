@@ -8,6 +8,30 @@ const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const documentList = document.getElementById('documentList');
 const loadingOverlay = document.getElementById('loadingOverlay');
+const scrollToBottomBtn = document.getElementById('scrollToBottomBtn');
+
+// Auto-scroll to bottom during streaming
+function scrollToBottomSmooth() {
+    chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
+}
+
+// Scroll to Bottom Button
+function updateScrollButton() {
+    const hasMessages = chatMessages && chatMessages.children.length > 0 && !chatMessages.querySelector('.welcome-message');
+    if (!hasMessages) {
+        scrollToBottomBtn.style.display = 'none';
+        return;
+    }
+    const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop <= chatMessages.clientHeight + 10;
+    scrollToBottomBtn.style.display = isAtBottom ? 'none' : 'flex';
+}
+
+scrollToBottomBtn.addEventListener('click', () => {
+    chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
+});
+
+// Monitor scroll to show/hide button
+chatMessages?.addEventListener('scroll', updateScrollButton);
 const sidebar = document.querySelector('.sidebar');
 const sidebarOverlay = document.getElementById('sidebarOverlay');
 const hamburgerBtn = document.getElementById('hamburgerBtn');
@@ -16,6 +40,24 @@ const toastEl = document.getElementById('toast');
 // Initialize
 window.addEventListener('DOMContentLoaded', () => {
     loadDocuments();
+    // Ensure scroll-to-bottom button listener is attached
+    const btn = document.getElementById('scrollToBottomBtn');
+    if (btn) {
+        btn.addEventListener('click', () => {
+            const chat = document.getElementById('chatMessages');
+            let scrollable = chat;
+            // Find the actually scrolling parent
+            while (scrollable && scrollable.scrollHeight <= scrollable.clientHeight) {
+                scrollable = scrollable.parentElement;
+            }
+            if (scrollable) {
+                console.log('Scrolling element to bottom:', scrollable.scrollHeight);
+                scrollable.scrollTo({ top: scrollable.scrollHeight, behavior: 'smooth' });
+            } else {
+                console.error('No scrollable container found');
+            }
+        });
+    }
     if (hamburgerBtn) {
         hamburgerBtn.addEventListener('click', () => {
             if (sidebar && sidebar.classList.contains('open')) {
@@ -497,6 +539,7 @@ async function sendMessage() {
                     } catch {}
                     // Render final content with markdown-lite formatting
                     streamContent.innerHTML = renderMarkdownLite(textPart);
+                    scrollToBottomSmooth();
                     break;
                 } else {
                     // Progressive update with markdown-lite formatting
@@ -506,6 +549,7 @@ async function sendMessage() {
                         started = true;
                     }
                     streamContent.innerHTML = renderMarkdownLite(buffer);
+                    scrollToBottomSmooth();
                 }
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
@@ -515,6 +559,7 @@ async function sendMessage() {
         if (!sourcesMeta) {
             streamContent.innerHTML = renderMarkdownLite(buffer);
         }
+        scrollToBottomSmooth();
 
         // Attach citations and feedback if metadata present
         if (sourcesMeta && sourcesMeta.sources && sourcesMeta.sources.length > 0) {
@@ -638,6 +683,7 @@ function addMessage(role, content) {
     } else {
         attachCopyButton(messageDiv, contentDiv, 'user');
     }
+    updateScrollButton();
 }
 
 // Document management
@@ -831,6 +877,7 @@ async function loadChatHistory() {
             </div>
         `;
     }
+    updateScrollButton();
 }
 
 function clearChat() {
@@ -960,7 +1007,8 @@ function promptUploadFirst() {
 // PDF Viewer
 let __currentPdfDoc = null;
 let __currentPdfPageNum = 1;
-let __currentPdfRendering = false;
+let __pdfViewerContainer = null;
+let __pdfPages = [];
 
 // Configure PDF.js worker
 if (typeof pdfjsLib !== 'undefined') {
@@ -972,42 +1020,116 @@ async function openPdfViewer(doc) {
     const titleEl = document.getElementById('pdfViewerTitle');
     const bodyEl = document.getElementById('pdfViewerBody');
     const closeBtn = document.getElementById('pdfViewerClose');
-    const canvasContainer = document.getElementById('pdfViewerCanvasContainer');
+    const pdfViewerContainer = document.getElementById('pdfViewerContainer');
     const prevBtn = document.getElementById('pdfViewerPrev');
     const nextBtn = document.getElementById('pdfViewerNext');
     const pageNumInput = document.getElementById('pdfViewerPageNum');
     const pageCountEl = document.getElementById('pdfViewerPageCount');
+    const askPrompt = document.getElementById('pdfAskPrompt');
+    const askInput = document.getElementById('pdfAskInput');
+    const askCancel = document.getElementById('pdfAskCancel');
+    const askSend = document.getElementById('pdfAskSend');
 
-    if (!overlay || !titleEl || !bodyEl || !closeBtn || !canvasContainer) return;
+    if (!overlay || !titleEl || !bodyEl || !closeBtn || !pdfViewerContainer) return;
 
     titleEl.textContent = doc.name;
-    // Clear previous content
-    canvasContainer.innerHTML = '';
-    // Create canvas for PDF rendering
-    const canvas = document.createElement('canvas');
-    canvas.id = 'pdfViewerCanvas';
-    canvasContainer.appendChild(canvas);
-    const ctx = canvas.getContext('2d');
+    __pdfViewerContainer = pdfViewerContainer;
+    pdfViewerContainer.innerHTML = '<div class="pdfViewer" id="pdfViewer"></div>';
 
     const close = () => {
-        overlay.classList.remove('show');
+        overlay.style.display = 'none';
         overlay.setAttribute('aria-hidden', 'true');
         closeBtn.onclick = null;
         prevBtn.onclick = null;
         nextBtn.onclick = null;
         pageNumInput.onchange = null;
-        document.body.style.overflow = '';
+        askCancel.onclick = null;
+        askSend.onclick = null;
         __currentPdfDoc = null;
+        __pdfPages = [];
+        __pdfViewerContainer = null;
+        document.body.style.overflow = '';
     };
 
-    const goToPage = async (num) => {
+    const goToPage = (num) => {
         if (!__currentPdfDoc || num < 1 || num > __currentPdfDoc.numPages) return;
         __currentPdfPageNum = num;
         pageNumInput.value = num;
         prevBtn.disabled = num <= 1;
         nextBtn.disabled = num >= __currentPdfDoc.numPages;
-        await renderPdfPage(__currentPdfDoc, num, canvas, ctx);
+        // Scroll the page into view
+        const pageEl = document.getElementById(`pdfPage${num}`);
+        if (pageEl) pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
+
+    const hideAskPrompt = () => {
+        askPrompt.style.display = 'none';
+        askInput.value = '';
+    };
+
+    const showAskPromptAt = (x, y, selectedText) => {
+        // Preserve selection range
+        const sel = document.getSelection();
+        const range = sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+        askPrompt.style.left = `${Math.min(Math.max(x, 8), pdfViewerContainer.offsetWidth - askPrompt.offsetWidth - 8)}px`;
+        askPrompt.style.top = `${Math.min(Math.max(y, 8), pdfViewerContainer.offsetHeight - askPrompt.offsetHeight - 8)}px`;
+        askPrompt.style.display = 'block';
+        askInput.focus();
+        // Restore selection after focus
+        if (range) {
+            setTimeout(() => {
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }, 0);
+        }
+        askSend.onclick = () => {
+            const q = askInput.value.trim();
+            if (!q) return;
+            hideAskPrompt();
+            overlay.style.display = 'none';
+            overlay.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            // Close viewer and switch to chat with context
+            if (currentDocument && currentDocument.id === doc.id) {
+                // Already the active doc; just send the question with context
+                messageInput.value = `${q}\n\nContext from PDF: "${selectedText}"`;
+                sendMessage();
+            } else {
+                // Switch to the document and send
+                currentDocument = doc;
+                updateDocumentList();
+                loadChatHistory().then(() => {
+                    messageInput.value = `${q}\n\nContext from PDF: "${selectedText}"`;
+                    sendMessage();
+                });
+            }
+        };
+    };
+
+    // Text selection handling
+    let selectionTimeout = null;
+    pdfViewerContainer.addEventListener('mouseup', (e) => {
+        clearTimeout(selectionTimeout);
+        selectionTimeout = setTimeout(() => {
+            const sel = document.getSelection();
+            const text = sel.toString().trim();
+            if (text && text.length > 3) {
+                const rect = pdfViewerContainer.getBoundingClientRect();
+                showAskPromptAt(e.clientX - rect.left, e.clientY - rect.top, text);
+            } else {
+                hideAskPrompt();
+            }
+        }, 200);
+    });
+
+    // Hide prompt when clicking away
+    document.addEventListener('mousedown', (e) => {
+        if (!askPrompt.contains(e.target)) {
+            hideAskPrompt();
+        }
+    });
+
+    askCancel.onclick = hideAskPrompt;
 
     closeBtn.onclick = close;
     prevBtn.onclick = () => goToPage(__currentPdfPageNum - 1);
@@ -1017,7 +1139,8 @@ async function openPdfViewer(doc) {
         if (e.target === overlay) close();
     }, { once: true });
 
-    overlay.classList.add('show');
+    // Show fullscreen
+    overlay.style.display = 'flex';
     overlay.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
 
@@ -1029,7 +1152,7 @@ async function openPdfViewer(doc) {
             serverFilename = `${doc.id}_${doc.name}`;
         }
         if (!serverFilename) {
-            canvasContainer.innerHTML = '<p>File not found on server.</p>';
+            pdfViewerContainer.innerHTML = '<p>File not found on server.</p>';
             return;
         }
         const url = `/uploads/${serverFilename}`;
@@ -1037,24 +1160,46 @@ async function openPdfViewer(doc) {
         const pdfDoc = await loadingTask.promise;
         __currentPdfDoc = pdfDoc;
         pageCountEl.textContent = pdfDoc.numPages;
+
+        // Render all pages as text-only for easy selection
+        const pdfViewer = document.getElementById('pdfViewer');
+        for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+            const page = await pdfDoc.getPage(pageNum);
+            const textContent = await page.getTextContent();
+
+            const pageContainer = document.createElement('div');
+            pageContainer.className = 'page';
+            pageContainer.id = `pdfPage${pageNum}`;
+
+            // Build HTML string from text items for natural selection
+            let html = '';
+            textContent.items.forEach(item => {
+                const txt = item.str;
+                if (txt) {
+                    // Escape HTML
+                    const escaped = txt.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    // Detect possible headings: bold font, all caps (reasonable length), ending with colon, or larger font
+                    const isHeading = (
+                        (item.fontName && item.fontName.includes('Bold')) ||
+                        (txt === txt.toUpperCase() && txt.length > 5 && txt.length < 80) ||
+                        (txt.endsWith(':') && txt.length < 80) ||
+                        (item.fontSize && item.fontSize > 16)
+                    );
+                    const tag = isHeading ? 'h3' : 'span';
+                    if (item.hasEOL) {
+                        html += `<${tag}>${escaped}</${tag}>`;
+                    } else {
+                        html += `<${tag}>${escaped}</${tag}>`;
+                    }
+                }
+            });
+            pageContainer.innerHTML = html;
+            pdfViewer.appendChild(pageContainer);
+            __pdfPages.push({ pageNum, element: pageContainer });
+        }
         await goToPage(1);
     } catch (e) {
         console.error('Failed to load PDF:', e);
-        canvasContainer.innerHTML = '<p>Failed to load PDF.</p>';
-    }
-}
-
-async function renderPdfPage(pdfDoc, pageNum, canvas, ctx) {
-    if (__currentPdfRendering) return;
-    __currentPdfRendering = true;
-    try {
-        const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        const renderContext = { canvasContext: ctx, viewport };
-        await page.render(renderContext).promise;
-    } finally {
-        __currentPdfRendering = false;
+        pdfViewerContainer.innerHTML = '<p>Failed to load PDF.</p>';
     }
 }
